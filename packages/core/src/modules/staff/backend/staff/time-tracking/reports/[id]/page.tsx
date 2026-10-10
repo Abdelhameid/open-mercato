@@ -23,8 +23,10 @@
 
 import * as React from 'react'
 import { useSearchParams } from 'next/navigation'
+import type { LegacyColumnDef as ColumnDef } from '@tanstack/react-table/legacy'
 import { Download, Lock, LockOpen } from 'lucide-react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
+import { DataTable } from '@open-mercato/ui/backend/DataTable'
 import { Alert, AlertDescription, AlertTitle } from '@open-mercato/ui/primitives/alert'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -55,6 +57,7 @@ import {
   parseReportSheet,
   type ReportHistoryEvent,
   type ReportSheetPayload,
+  type ReportSheetRow,
 } from '../../../../../lib/timesheets-reports/reportSheetData'
 import { formatReportMinutes } from '../../../../../lib/timesheets-reports/reportTotals'
 
@@ -203,6 +206,57 @@ export default function TimeTrackingReportDetailPage({ params }: { params?: { id
       return formatCurrency(amount, sheet?.report.currencyCode ?? undefined) ?? '—'
     },
     [sheet?.report.currencyCode],
+  )
+
+  const lockedEntriesColumns = React.useMemo<ColumnDef<ReportSheetRow>[]>(
+    () => [
+      {
+        accessorKey: 'date',
+        header: t('staff.time_tracking.reports.export.date', 'Date'),
+        cell: ({ row }) => <span className="text-muted-foreground">{row.original.date}</span>,
+      },
+      {
+        accessorKey: 'taskLabel',
+        header: t('staff.time_tracking.reports.export.task', 'Task'),
+      },
+      {
+        accessorKey: 'personLabel',
+        header: t('staff.time_tracking.reports.export.person', 'Person'),
+      },
+      {
+        id: 'hours',
+        header: () => (
+          <span className="block text-right">
+            {t('staff.time_tracking.reports.sheet.time', 'Time')}
+          </span>
+        ),
+        cell: ({ row }) => (
+          <span className="block font-mono tabular-nums text-right">{row.original.hours}</span>
+        ),
+      },
+      {
+        id: 'amount',
+        header: () => (
+          <span className="block text-right">
+            {t('staff.time_tracking.reports.sheet.amount', 'Amount')}
+          </span>
+        ),
+        cell: ({ row }) => (
+          <span className="block font-mono tabular-nums text-right">{money(row.original.amount)}</span>
+        ),
+      },
+      {
+        id: 'lock',
+        header: '',
+        meta: { maxWidth: '2.5rem' },
+        cell: () => (
+          <span className="text-muted-foreground">
+            <Lock aria-hidden="true" className="size-4" />
+          </span>
+        ),
+      },
+    ],
+    [money, t],
   )
 
   const roundingLabel = React.useMemo(() => {
@@ -470,6 +524,7 @@ export default function TimeTrackingReportDetailPage({ params }: { params?: { id
                   .replace('{hours}', formatReportMinutes(sheet.totals.billableMinutes))}
               </span>
             </header>
+<<<<<<< HEAD
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -508,6 +563,15 @@ export default function TimeTrackingReportDetailPage({ params }: { params?: { id
                 </tbody>
               </table>
             </div>
+=======
+            <DataTable<ReportSheetRow>
+              embedded
+              extensionTableId={extensionPoints.hosts.reportDetailLockedEntriesTable.tableId}
+              disableRowClick
+              columns={lockedEntriesColumns}
+              data={sheet.rows}
+            />
+>>>>>>> f451ce4c390087f90d5314e002e9d009d5339e08
             {sheet.rowsTruncated ? (
               <p className="border-t border-border p-3 text-xs text-muted-foreground">
                 {t(

@@ -93,16 +93,29 @@ export const REPO_WIDE_GUARDS = [
         scans: 'every module-root notification catalogue under packages and apps — explicit delivery-channel eligibility (#5495)',
       },
       {
+        path: 'src/modules/notifications/__tests__/category-labels-coverage.test.ts',
+        scans: 'every non-enterprise packages/* and apps/* module notifications.ts and i18n dictionary — a translated notifications.categories.<key> heading for every resolved category (#7089)',
+      },
+      {
+        path: 'src/__tests__/dictionary-key-schema-coverage.test.ts',
+        scans: 'every packages/*/src/modules tree plus the apps/mercato and create-app template module roots — dictionary key literals that the create route\'s dictionaryKeySchema would reject',
+      },
+      {
         path: 'src/modules/__tests__/crud-indexer-config.test.ts',
         scans: 'packages/ and apps/ — CRUD indexer configuration',
       },
       {
+<<<<<<< HEAD
         path: 'src/__tests__/crud-resource-path.test.ts',
         scans: 'apps/mercato and the create-app template module trees plus the generated route manifest — URLs the screens build that no route answers',
       },
       {
         path: 'src/__tests__/crud-filter-keys.test.ts',
         scans: 'apps/mercato and the create-app template module trees — camelCase CRUD list filter keys, which the query matches against nothing',
+=======
+        path: 'src/modules/portal/__tests__/boundaryNavigation.test.ts',
+        scans: 'every portal source tree under packages/ and apps/ — boundary-crossing portal navigations must be full page loads. The rule exists because the portal (frontend) layout sits above [...slug], so a client-side navigation across the public/authenticated line leaves the previous side\'s chrome painted over the new page (#5678). The guard lives in core while the call sites it protects include packages/ui (the portal shell and hooks) and any module contributing portal pages, so the turbo filter would skip it on exactly the PRs that break it (#5958).',
+>>>>>>> f451ce4c390087f90d5314e002e9d009d5339e08
       },
       {
         path: 'src/modules/design_system/gallery/__tests__/gallery-coverage.test.ts',
@@ -178,6 +191,10 @@ export const REPO_WIDE_GUARDS = [
         path: 'src/modules/__tests__/cli-registry-boundary.test.ts',
         scans: 'packages/ and apps/ — runtime files reading the CLI-only module registry',
       },
+      {
+        path: 'src/lib/di/__tests__/di-injection-mode.test.ts',
+        scans: 'every di.ts and container.ts under packages/ and apps/ — argument-taking asFunction registrations that skip .proxy(), which CLASSIC injection resolves by parameter name and a bundler may rename. The registrations it guards live in core, enterprise and app modules rather than in shared, so the turbo filter never selects this workspace for the PRs that can break them (#5861).',
+      },
     ],
   },
   {
@@ -251,6 +268,10 @@ export const REPO_WIDE_GUARDS = [
       {
         path: 'src/modules/agent_orchestrator/__tests__/agent-run-invocation-identity.test.ts',
         scans: 'packages/core/src/modules/workflows/lib — that the activity executor and the async worker both thread `invocationId` into the agent bridge, which is what gives an agent invocation an identity instead of a creation-time guess',
+      },
+      {
+        path: 'src/modules/security/__tests__/enterprise-notification-category-labels.test.ts',
+        scans: 'every packages/* and apps/* module i18n dictionary — translated notification category headings for enterprise notification types (#7095)',
       },
     ],
   },

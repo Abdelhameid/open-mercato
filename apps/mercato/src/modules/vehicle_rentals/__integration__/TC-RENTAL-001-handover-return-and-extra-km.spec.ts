@@ -43,6 +43,8 @@ test.describe('TC-RENTAL-001: rental handover, return and extra-kilometre billin
     // midnight three days later, so the billed periods are exactly three.
     const windowStart = new Date()
     windowStart.setUTCHours(0, 0, 0, 0)
+    // The pricing counts the end date inclusively (end-of-day), so a
+    // start + 2 days window bills as three daily periods.
     const windowEnd = new Date(windowStart.getTime() + 2 * 24 * 60 * 60 * 1000)
 
     let contractId: string | null = null
@@ -67,6 +69,9 @@ test.describe('TC-RENTAL-001: rental handover, return and extra-kilometre billin
         vehicleId,
         driverId,
         odoStartKm: 1000,
+        // Billing uses the actual rental period when it is supplied; pin it to
+        // the contract window so the three-day arithmetic is deterministic.
+        actualStartAt: windowStart.toISOString(),
       })
       expect(handover.ok, JSON.stringify(handover.body)).toBeTruthy()
 
@@ -85,7 +90,11 @@ test.describe('TC-RENTAL-001: rental handover, return and extra-kilometre billin
       const badOdo = await runModuleAction(request, token, `${CONTRACTS}/return`, { id: contractId, odoEndKm: 900 })
       expect(badOdo.status).toBe(409)
 
-      const returned = await runModuleAction(request, token, `${CONTRACTS}/return`, { id: contractId, odoEndKm: 1600 })
+      const returned = await runModuleAction(request, token, `${CONTRACTS}/return`, {
+        id: contractId,
+        odoEndKm: 1600,
+        actualEndAt: windowEnd.toISOString(),
+      })
       expect(returned.ok, JSON.stringify(returned.body)).toBeTruthy()
 
       const closed = await fetchModuleRow(request, token, CONTRACTS, contractId)
@@ -125,8 +134,18 @@ test.describe('TC-RENTAL-001: rental handover, return and extra-kilometre billin
     let first: string | null = null
     let second: string | null = null
     try {
-      first = (await createRentalContractFixture(request, token, { customerId: company, customerSnapshot: snapshot })).id
-      second = (await createRentalContractFixture(request, token, { customerId: company, customerSnapshot: snapshot })).id
+      // This spec exercises vehicle overlap; a rental without a driver keeps the
+      // handover focused on the vehicle.
+      first = (await createRentalContractFixture(request, token, {
+        customerId: company,
+        customerSnapshot: snapshot,
+        rentalType: 'without_driver',
+      })).id
+      second = (await createRentalContractFixture(request, token, {
+        customerId: company,
+        customerSnapshot: snapshot,
+        rentalType: 'without_driver',
+      })).id
 
       expect((await runModuleAction(request, token, `${CONTRACTS}/handover`, { id: first, vehicleId, odoStartKm: 10 })).ok).toBeTruthy()
       const overlap = await runModuleAction(request, token, `${CONTRACTS}/handover`, { id: second, vehicleId, odoStartKm: 10 })

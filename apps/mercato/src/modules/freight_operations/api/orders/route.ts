@@ -46,6 +46,7 @@ const crud = makeCrudRoute({
     fields: [
       'id', 'organization_id', 'tenant_id', 'order_number', 'status', 'source', 'submitted_at', 'customer_id', 'customer_snapshot',
       'cargo_description', 'cargo_quantity', 'cargo_unit', 'cargo_weight_kg', 'cargo_volume_m3',
+      'catalog_product_id', 'package_count',
       'cargo_hazardous', 'cargo_refrigerated', 'notes', 'cancellation_reason',
       'pickup_location', 'dropoff_location', 'requested_pickup_at', 'requested_delivery_at',
       'truck_type_required', 'vehicle_id', 'driver_id', 'vehicle_snapshot', 'driver_snapshot',
@@ -141,6 +142,8 @@ const orderListItemSchema = z.object({
   cargo_unit: z.string().nullable().optional(),
   cargo_weight_kg: z.string().nullable().optional(),
   cargo_volume_m3: z.string().nullable().optional(),
+  catalog_product_id: z.string().uuid().nullable().optional(),
+  package_count: z.number().int().nullable().optional(),
   cargo_hazardous: z.boolean().optional(),
   cargo_refrigerated: z.boolean().optional(),
   notes: z.string().nullable().optional(),

@@ -17,9 +17,11 @@ import { ImportDriversDialog } from './ImportDriversDialog'
 import { DRIVER_STATUS_VALUES, type DriverStatusValue } from '../lib/transportEnums'
 
 export const RESOURCE = 'transport_operations/drivers'
-export const CREATE_HREF = '/backend/transport/drivers/create'
-export const editHref = (id: string) => `/backend/transport/drivers/${id}/edit`
-export const ENTITY_ID = 'transport_operations:transport_driver'
+// Drivers are HR people records: creation and editing live in the HR screens,
+// while this table stays the dispatcher's read view over the same register.
+export const CREATE_HREF = '/backend/hr/drivers/create'
+export const editHref = (id: string) => `/backend/hr/drivers/${id}/edit`
+export const ENTITY_ID = 'hr_management:hr_driver_profile'
 
 export type DriverStatus = DriverStatusValue
 

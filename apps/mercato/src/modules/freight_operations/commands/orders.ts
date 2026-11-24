@@ -29,6 +29,7 @@ import { readFreightSettings, type FreightScope, type FreightSettings } from '..
 import { allocateDocumentNumber } from '../lib/documentNumber'
 import { createTrackingToken } from '../lib/trackingToken'
 import { assertFreightAssignmentAvailable } from '../lib/assignment'
+import { findTransportScheduleReference } from '../lib/transportReference'
 import { buildInvoiceDraft } from '../lib/invoiceDraft'
 import { toAmountNumber } from '../lib/money'
 import {
@@ -182,6 +183,8 @@ const orderCrudConfig: CrudCommandConfig<FreightOrder> = {
       cargoVolumeM3: optionalString(input.cargoVolumeM3),
       cargoQuantity: optionalString(input.cargoQuantity),
       cargoUnit: (input.cargoUnit as FreightOrder['cargoUnit']) ?? null,
+      catalogProductId: optionalString(input.catalogProductId),
+      packageCount: input.packageCount === undefined || input.packageCount === null ? null : Number(input.packageCount),
       cargoHazardous: Boolean(input.cargoHazardous ?? false),
       cargoRefrigerated: Boolean(input.cargoRefrigerated ?? false),
       temperatureMinC: optionalString(input.temperatureMinC),
@@ -210,6 +213,8 @@ const orderCrudConfig: CrudCommandConfig<FreightOrder> = {
       cargoVolumeM3: optionalString(input.cargoVolumeM3),
       cargoQuantity: optionalString(input.cargoQuantity),
       cargoUnit: input.cargoUnit,
+      catalogProductId: input.catalogProductId,
+      packageCount: input.packageCount,
       cargoHazardous: input.cargoHazardous,
       cargoRefrigerated: input.cargoRefrigerated,
       temperatureMinC: optionalString(input.temperatureMinC),
@@ -314,6 +319,8 @@ const submitExternalOrderCommand: CommandHandler<
         cargoVolumeM3: optionalString(input.cargoVolumeM3),
         cargoQuantity: optionalString(input.cargoQuantity),
         cargoUnit: input.cargoUnit ?? null,
+        catalogProductId: optionalString(input.catalogProductId),
+        packageCount: input.packageCount === undefined || input.packageCount === null ? null : Number(input.packageCount),
         cargoHazardous: Boolean(input.cargoHazardous ?? false),
         cargoRefrigerated: Boolean(input.cargoRefrigerated ?? false),
         pickupLocation: input.pickupLocation,
@@ -419,6 +426,25 @@ const assignOrderCommand: CommandHandler<AssignOrderInput, { orderId: string }> 
         organizationId: scope.organizationId,
         deletedAt: null,
       })
+      // A link to the transport board makes transport the dispatch authority for
+      // this job, so the schedule must exist and agree with the assignment.
+      if (input.transportTripId) {
+        const reference = await findTransportScheduleReference(tx, scope, input.transportTripId)
+        if (reference.available && !reference.schedule) {
+          return raiseFreightError(409, 'transport_trip_not_found', 'The selected transport trip does not exist.')
+        }
+        if (reference.schedule) {
+          if (reference.schedule.status === 'completed' || reference.schedule.status === 'cancelled') {
+            return raiseFreightError(409, 'transport_trip_closed', 'The selected transport trip is already closed.')
+          }
+          if (reference.schedule.vehicleId && reference.schedule.vehicleId !== input.vehicleId) {
+            return raiseFreightError(409, 'transport_trip_mismatch', 'The selected transport trip uses a different vehicle.')
+          }
+          if (reference.schedule.driverId && reference.schedule.driverId !== input.driverId) {
+            return raiseFreightError(409, 'transport_trip_mismatch', 'The selected transport trip uses a different driver.')
+          }
+        }
+      }
       locked.vehicleId = input.vehicleId
       locked.driverId = input.driverId
       locked.vehicleSnapshot = snapshots.vehicleSnapshot
@@ -432,6 +458,7 @@ const assignOrderCommand: CommandHandler<AssignOrderInput, { orderId: string }> 
         linkedTrip.driverId = input.driverId
         linkedTrip.vehicleSnapshot = snapshots.vehicleSnapshot
         linkedTrip.driverSnapshot = snapshots.driverSnapshot
+        linkedTrip.transportTripId = input.transportTripId ?? linkedTrip.transportTripId ?? null
         linkedTrip.updatedAt = locked.updatedAt
         await tx.persist(linkedTrip)
       }
@@ -652,6 +679,7 @@ const invoiceOrderCommand: CommandHandler<{ id: string }, InvoiceOrderResult> = 
         {
           name: lineName,
           description: `${order.cargoDescription}\n${order.pickupLocation} → ${order.dropoffLocation}`,
+          productId: order.catalogProductId ?? null,
           netAmount,
           taxRatePercent: order.vatRate,
         },

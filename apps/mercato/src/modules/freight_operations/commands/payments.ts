@@ -1,5 +1,6 @@
 import { LockMode } from '@mikro-orm/core'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import type { ModuleConfigService } from '@open-mercato/core/modules/configs/lib/module-config-service'
 import { registerCommand, type CommandHandler, type CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import { enforceCommandOptimisticLockWithGuards } from '@open-mercato/shared/lib/crud/optimistic-lock-command'
 import { FreightOrder, FreightPayment, FreightTripAbstract } from '../data/entities'
@@ -12,7 +13,8 @@ import {
 import { resolveScope } from './crud'
 import { FREIGHT_ABSTRACT_ENTITY_ID, FREIGHT_ORDER_ENTITY_ID, FREIGHT_PAYMENT_ENTITY_ID } from './entities'
 import { raiseFreightError } from '../lib/errors'
-import type { FreightScope } from '../lib/freightSettings'
+import { readFreightSettings, type FreightScope } from '../lib/freightSettings'
+import { allocateDocumentNumber } from '../lib/documentNumber'
 import { halalasToAmountString, toHalalas } from '../lib/money'
 import {
   readSalesInvoiceReference,
@@ -236,10 +238,13 @@ const recordPaymentCommand: CommandHandler<RecordPaymentInput, RecordPaymentResu
     const scope = resolveScope(ctx)
     const em = entityManager(ctx)
     const receivedAt = toDate(input.receivedAt) ?? new Date()
+    const configService = ctx.container.resolve('moduleConfigService') as ModuleConfigService
+    const settings = await readFreightSettings(configService, scope)
 
     const staged = await em.transactional(async (tx) => {
       const aggregate = await loadAggregateForUpdate(ctx, tx, scope, input)
       const currencyCode = input.currencyCode ?? aggregate.currencyCode
+      const receiptNumber = await allocateDocumentNumber(tx, scope, 'receipt_voucher', settings)
       const payment = tx.create(FreightPayment, {
         tenantId: scope.tenantId,
         organizationId: scope.organizationId,
@@ -247,6 +252,7 @@ const recordPaymentCommand: CommandHandler<RecordPaymentInput, RecordPaymentResu
         abstractId: aggregate.kind === 'abstract' ? aggregate.abstractId : null,
         customerId: aggregate.customerId,
         currencyCode,
+        receiptNumber,
         amount: String(input.amount),
         method: input.method ?? 'bank_transfer',
         reference: input.reference ?? null,

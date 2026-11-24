@@ -337,6 +337,8 @@ const handoverCommand: CommandHandler<Record<string, unknown>, { rentalId: strin
       rentalNumber: contract.rentalNumber,
       tenantId: scope.tenantId,
       organizationId: scope.organizationId,
+      vehicleId: contract.vehicleId ?? null,
+      odometer: contract.odoStartKm ?? null,
     })
     return { rentalId: contract.id }
   },
@@ -427,6 +429,8 @@ const returnCommand: CommandHandler<Record<string, unknown>, { rentalId: string 
       tenantId: scope.tenantId,
       organizationId: scope.organizationId,
       extraKm: contract.extraKm ?? 0,
+      vehicleId: contract.vehicleId ?? null,
+      odometer: contract.odoEndKm ?? null,
     })
     return { rentalId: contract.id }
   },

@@ -6,15 +6,9 @@ import { emitCrudSideEffects } from '@open-mercato/shared/lib/commands/helpers'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import { z } from 'zod'
-import { TransportDriver, TransportTripSchedule } from '../data/entities'
+import { TransportTripSchedule } from '../data/entities'
 import { raiseTransportError } from '../lib/errors'
-import {
-  TRANSPORT_TRIP_ENTITY_ID,
-  transportDriverEvents,
-  transportDriverIndexer,
-  transportTripEvents,
-  transportTripIndexer,
-} from './transport'
+import { TRANSPORT_TRIP_ENTITY_ID, transportTripEvents, transportTripIndexer } from './transport'
 
 export const completeTripSchema = z.object({ id: z.string().uuid() })
 export type CompleteTripInput = z.infer<typeof completeTripSchema>
@@ -39,19 +33,12 @@ const completeTripCommand: CommandHandler<CompleteTripInput, { tripId: string; c
       if (!trip) return raiseTransportError(404, 'trip_not_found', 'Trip schedule not found.')
       if (trip.status !== 'in_progress') return raiseTransportError(409, 'trip_not_in_progress', 'Only trips in progress can be completed.')
 
-      const driver = await transactionEm.findOne(TransportDriver, {
-        id: trip.driverId, ...scope, deletedAt: null,
-      }, { lockMode: LockMode.PESSIMISTIC_WRITE })
-      if (!driver || driver.status !== 'on_trip') return raiseTransportError(409, 'driver_not_on_trip', 'The assigned driver is not on this trip.')
-
       const completedAt = new Date()
       trip.status = 'completed'
       trip.actualEndTime = completedAt
       trip.updatedAt = completedAt
-      driver.status = 'available'
-      driver.updatedAt = completedAt
-      await transactionEm.persist([trip, driver]).flush()
-      return { trip, driver, completedAt }
+      await transactionEm.persist(trip).flush()
+      return { trip, completedAt }
     })
 
     const dataEngine = ctx.container.resolve('dataEngine') as DataEngine
@@ -59,11 +46,6 @@ const completeTripCommand: CommandHandler<CompleteTripInput, { tripId: string; c
       dataEngine, action: 'updated', entity: result.trip,
       identifiers: { id: result.trip.id, ...scope }, actorUserId: ctx.auth?.sub ?? null,
       events: transportTripEvents, indexer: transportTripIndexer,
-    })
-    await emitCrudSideEffects({
-      dataEngine, action: 'updated', entity: result.driver,
-      identifiers: { id: result.driver.id, ...scope }, actorUserId: ctx.auth?.sub ?? null,
-      events: transportDriverEvents, indexer: transportDriverIndexer,
     })
     return { tripId: result.trip.id, completedAt: result.completedAt }
   },

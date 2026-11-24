@@ -53,6 +53,7 @@ export type EmployeeRow = {
   email?: string | null
   phone?: string | null
   bank_iban?: string | null
+  user_id?: string | null
   updated_at?: string | null
   updatedAt?: string | null
 }

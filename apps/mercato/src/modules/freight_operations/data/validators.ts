@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   ABSTRACT_LINE_RESOLUTIONS,
+  ADJUSTMENT_NOTE_TYPES,
   BILLING_CYCLES,
   CARGO_UNITS,
   CHARGE_KINDS,
@@ -52,6 +53,8 @@ export const createOrderSchema = z.object({
   cargoVolumeM3: nonNegativeAmount.optional().nullable(),
   cargoQuantity: nonNegativeAmount.optional().nullable(),
   cargoUnit: z.enum(CARGO_UNITS).optional().nullable(),
+  catalogProductId: z.string().uuid().optional().nullable(),
+  packageCount: z.coerce.number().int().min(0).optional().nullable(),
   cargoHazardous: z.boolean().optional(),
   cargoRefrigerated: z.boolean().optional(),
   temperatureMinC: signedAmount.optional().nullable(),
@@ -111,6 +114,8 @@ export const createPortalOrderSchema = z.object({
   cargoUnit: z.enum(CARGO_UNITS).optional().nullable(),
   cargoWeightKg: nonNegativeAmount.optional().nullable(),
   cargoVolumeM3: nonNegativeAmount.optional().nullable(),
+  catalogProductId: z.string().uuid().optional().nullable(),
+  packageCount: z.coerce.number().int().min(0).optional().nullable(),
   cargoHazardous: z.boolean().optional(),
   cargoRefrigerated: z.boolean().optional(),
   notes: z.string().trim().max(4000).optional().nullable(),
@@ -493,6 +498,35 @@ export type DriverRestEndInput = z.infer<typeof driverRestEndSchema>
 export type DriverSosInput = z.infer<typeof driverSosSchema>
 
 
+/**
+ * A credit reduces what the customer owes (and the revenue/VAT previously
+ * recognised); a debit increases it. The note carries the amounts after the
+ * command computes them from `netAmount` + `vatRate`, so the GL posting and the
+ * printed document can never disagree.
+ */
+export const createAdjustmentNoteSchema = z.object({
+  noteType: z.enum(ADJUSTMENT_NOTE_TYPES),
+  orderId: z.string().uuid().optional().nullable(),
+  tripId: z.string().uuid().optional().nullable(),
+  abstractId: z.string().uuid().optional().nullable(),
+  salesInvoiceId: z.string().uuid().optional().nullable(),
+  customerId: z.string().uuid().optional().nullable(),
+  customerSnapshot: customerSnapshotSchema.optional().nullable(),
+  currencyCode: z.string().trim().length(3).optional(),
+  netAmount: nonNegativeAmount,
+  taxAmount: nonNegativeAmount.optional().nullable(),
+  vatRate: vatRateSchema.optional().nullable(),
+  reason: z.string().trim().max(2000).optional().nullable(),
+  issueDate: dateOnlySchema.optional().nullable(),
+})
+
+export const updateAdjustmentNoteSchema = createAdjustmentNoteSchema.partial().extend({
+  id: z.string().uuid(),
+})
+
+export type CreateAdjustmentNoteInput = z.infer<typeof createAdjustmentNoteSchema>
+export type UpdateAdjustmentNoteInput = z.infer<typeof updateAdjustmentNoteSchema>
+
 export const freightSettingsStoredSchema = z.object({
   defaultRequiresCustomerApproval: z.boolean().optional(),
   defaultPaymentTermsDays: z.coerce.number().int().min(0).max(365).optional(),
@@ -508,6 +542,8 @@ export const freightSettingsStoredSchema = z.object({
   tripNumberPrefix: z.string().trim().min(1).max(8).optional(),
   abstractNumberPrefix: z.string().trim().min(1).max(8).optional(),
   deliveryNoteNumberPrefix: z.string().trim().min(1).max(8).optional(),
+  adjustmentNoteNumberPrefix: z.string().trim().min(1).max(8).optional(),
+  receiptNumberPrefix: z.string().trim().min(1).max(8).optional(),
 })
 
 export const freightSettingsInputSchema = freightSettingsStoredSchema

@@ -77,6 +77,32 @@ export const updateDriverProfileSchema = createDriverProfileSchema.partial().ext
 export type CreateDriverProfileInput = z.infer<typeof createDriverProfileSchema>
 export type UpdateDriverProfileInput = z.infer<typeof updateDriverProfileSchema>
 
+export const DRIVER_ROSTER_STATUSES = ['available', 'on_trip', 'on_leave', 'suspended'] as const
+export type DriverRosterStatus = (typeof DRIVER_ROSTER_STATUSES)[number]
+
+/**
+ * Person + licence payload for the driver roster. The transport API and its bulk
+ * importer speak this shape: a driver is an HR person record with a driver
+ * profile, so one call creates (or reuses) the employee and writes the profile.
+ */
+export const createDriverRosterSchema = z.object({
+  employeeId: z.string().uuid().optional().nullable(),
+  userId: z.string().uuid().optional().nullable(),
+  fullName: z.string().min(1),
+  nationalId: z.string().min(1),
+  licenseNumber: z.string().min(1),
+  licenseExpiry: dateInput,
+  phone: z.string().min(1),
+  status: z.enum(DRIVER_ROSTER_STATUSES).optional(),
+})
+
+export const updateDriverRosterSchema = createDriverRosterSchema.partial().extend({
+  id: z.string().uuid(),
+})
+
+export type CreateDriverRosterInput = z.infer<typeof createDriverRosterSchema>
+export type UpdateDriverRosterInput = z.infer<typeof updateDriverRosterSchema>
+
 export const createAttendanceRecordSchema = z.object({
   employeeId: z.string().uuid(),
   date: dateInput,

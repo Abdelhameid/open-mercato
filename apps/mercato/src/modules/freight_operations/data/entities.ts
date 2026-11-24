@@ -64,7 +64,7 @@ export type DeliveryNoteStatus = (typeof DELIVERY_NOTE_STATUSES)[number]
 export const EXTERNAL_WAYBILL_STATUSES = ['not_recorded', 'recorded', 'cancelled'] as const
 export type ExternalWaybillStatus = (typeof EXTERNAL_WAYBILL_STATUSES)[number]
 
-export const DOCUMENT_SEQUENCE_KINDS = ['order', 'contract', 'trip', 'abstract', 'delivery_note'] as const
+export const DOCUMENT_SEQUENCE_KINDS = ['order', 'contract', 'trip', 'abstract', 'delivery_note', 'adjustment_note', 'receipt_voucher'] as const
 export type DocumentSequenceKind = (typeof DOCUMENT_SEQUENCE_KINDS)[number]
 
 @Entity({ tableName: 'freight_orders' })
@@ -72,6 +72,7 @@ export type DocumentSequenceKind = (typeof DOCUMENT_SEQUENCE_KINDS)[number]
 @Index({ name: 'freight_orders_status_idx', properties: ['organizationId', 'status'] })
 @Index({ name: 'freight_orders_customer_idx', properties: ['organizationId', 'customerId'] })
 @Index({ name: 'freight_orders_requested_pickup_idx', properties: ['organizationId', 'requestedPickupAt'] })
+@Index({ name: 'freight_orders_product_idx', properties: ['organizationId', 'catalogProductId'] })
 @Index({
   name: 'freight_orders_number_unique_idx',
   expression:
@@ -129,6 +130,15 @@ export class FreightOrder {
 
   @Enum({ items: [...CARGO_UNITS], type: 'text', name: 'cargo_unit', nullable: true })
   cargoUnit?: CargoUnit | null
+
+  // Catalog product and package count link the free-text cargo to the product
+  // master. The product is copied onto the sales invoice line when the order is
+  // billed; the id is a reference only (no cross-module ORM relation).
+  @Property({ name: 'catalog_product_id', type: 'uuid', nullable: true })
+  catalogProductId?: string | null
+
+  @Property({ name: 'package_count', type: 'integer', nullable: true })
+  packageCount?: number | null
 
   @Property({ name: 'cargo_hazardous', type: 'boolean', default: false })
   cargoHazardous: boolean = false
@@ -439,6 +449,11 @@ export class FreightContractRoute {
   name: 'freight_trips_number_unique_idx',
   expression:
     'create unique index "freight_trips_number_unique_idx" on "freight_trips" ("organization_id", "tenant_id", "trip_number") where deleted_at is null',
+})
+@Index({
+  name: 'freight_trips_transport_trip_unique_idx',
+  expression:
+    'create unique index "freight_trips_transport_trip_unique_idx" on "freight_trips" ("organization_id", "tenant_id", "transport_trip_id") where transport_trip_id is not null and deleted_at is null',
 })
 export class FreightTrip {
   [OptionalProps]?: 'source' | 'quantity' | 'chargesTotalNet' | 'totalNetAmount' | 'taxAmount' | 'totalGrossAmount' | 'currencyCode' | 'executionStatus' | 'billingStatus' | 'createdAt' | 'updatedAt' | 'deletedAt'
@@ -926,6 +941,11 @@ export class FreightTripAbstractLine {
 @Index({ name: 'freight_payments_order_idx', properties: ['organizationId', 'orderId'] })
 @Index({ name: 'freight_payments_abstract_idx', properties: ['organizationId', 'abstractId'] })
 @Index({ name: 'freight_payments_customer_idx', properties: ['organizationId', 'customerId'] })
+@Index({
+  name: 'freight_payments_receipt_number_unique_idx',
+  expression:
+    'create unique index "freight_payments_receipt_number_unique_idx" on "freight_payments" ("organization_id", "tenant_id", "receipt_number") where receipt_number is not null and deleted_at is null',
+})
 export class FreightPayment {
   [OptionalProps]?: 'method' | 'status' | 'currencyCode' | 'createdAt' | 'updatedAt' | 'deletedAt'
 
@@ -949,6 +969,10 @@ export class FreightPayment {
 
   @Property({ name: 'currency_code', type: 'text', default: 'SAR' })
   currencyCode: string = 'SAR'
+
+  // Sequential receipt voucher number, allocated when the payment is recorded.
+  @Property({ name: 'receipt_number', type: 'text', nullable: true })
+  receiptNumber?: string | null
 
   @Property({ type: 'numeric', precision: 18, scale: 4 })
   amount!: string
@@ -1006,6 +1030,11 @@ export class FreightPayment {
   name: 'freight_delivery_notes_number_unique_idx',
   expression:
     'create unique index "freight_delivery_notes_number_unique_idx" on "freight_delivery_notes" ("organization_id", "tenant_id", "note_number") where deleted_at is null',
+})
+@Index({
+  name: 'freight_delivery_notes_share_token_unique_idx',
+  expression:
+    'create unique index "freight_delivery_notes_share_token_unique_idx" on "freight_delivery_notes" ("share_token") where share_token is not null and deleted_at is null',
 })
 export class FreightDeliveryNote {
   [OptionalProps]?: 'status' | 'cargoHazardous' | 'cargoRefrigerated' | 'externalWaybillStatus' | 'createdAt' | 'updatedAt' | 'deletedAt'
@@ -1126,6 +1155,12 @@ export class FreightDeliveryNote {
 
   @Property({ name: 'pop_document_id', type: 'uuid', nullable: true })
   popDocumentId?: string | null
+
+  // Opaque token for the customer-facing read-only document link. Created on
+  // demand by the staff "share" action; possession of the token is the only
+  // authorization the public endpoint requires.
+  @Property({ name: 'share_token', type: 'text', nullable: true })
+  shareToken?: string | null
 
   @Property({ name: 'external_waybill_number', type: 'text', nullable: true })
   externalWaybillNumber?: string | null
@@ -1304,6 +1339,100 @@ export class FreightDriverRating {
   deletedAt?: Date | null
 }
 
+export const ADJUSTMENT_NOTE_TYPES = ['credit', 'debit'] as const
+export type AdjustmentNoteType = (typeof ADJUSTMENT_NOTE_TYPES)[number]
+
+export const ADJUSTMENT_NOTE_STATUSES = ['draft', 'issued', 'cancelled'] as const
+export type AdjustmentNoteStatus = (typeof ADJUSTMENT_NOTE_STATUSES)[number]
+
+@Entity({ tableName: 'freight_adjustment_notes' })
+@Index({ name: 'freight_adjustment_notes_scope_idx', properties: ['organizationId', 'tenantId'] })
+@Index({ name: 'freight_adjustment_notes_order_idx', properties: ['organizationId', 'orderId'] })
+@Index({ name: 'freight_adjustment_notes_status_idx', properties: ['organizationId', 'noteType', 'status'] })
+@Index({
+  name: 'freight_adjustment_notes_number_unique_idx',
+  expression:
+    'create unique index "freight_adjustment_notes_number_unique_idx" on "freight_adjustment_notes" ("organization_id", "tenant_id", "note_number") where deleted_at is null',
+})
+export class FreightAdjustmentNote {
+  [OptionalProps]?: 'status' | 'currencyCode' | 'grossAmount' | 'createdAt' | 'updatedAt' | 'deletedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'note_number', type: 'text' })
+  noteNumber!: string
+
+  @Enum({ items: [...ADJUSTMENT_NOTE_TYPES], type: 'text', name: 'note_type' })
+  noteType!: AdjustmentNoteType
+
+  @Enum({ items: [...ADJUSTMENT_NOTE_STATUSES], type: 'text', name: 'status', default: 'draft' })
+  status: AdjustmentNoteStatus = 'draft'
+
+  @Property({ name: 'order_id', type: 'uuid', nullable: true })
+  orderId?: string | null
+
+  @Property({ name: 'trip_id', type: 'uuid', nullable: true })
+  tripId?: string | null
+
+  @Property({ name: 'abstract_id', type: 'uuid', nullable: true })
+  abstractId?: string | null
+
+  @Property({ name: 'sales_invoice_id', type: 'uuid', nullable: true })
+  salesInvoiceId?: string | null
+
+  @Property({ name: 'customer_id', type: 'uuid' })
+  customerId!: string
+
+  @Property({ name: 'customer_snapshot', type: 'jsonb', nullable: true })
+  customerSnapshot?: Record<string, unknown> | null
+
+  @Property({ name: 'currency_code', type: 'text', default: 'SAR' })
+  currencyCode: string = 'SAR'
+
+  @Property({ name: 'net_amount', type: 'numeric', precision: 18, scale: 4 })
+  netAmount!: string
+
+  @Property({ name: 'tax_amount', type: 'numeric', precision: 18, scale: 4 })
+  taxAmount!: string
+
+  @Property({ name: 'gross_amount', type: 'numeric', precision: 18, scale: 4 })
+  grossAmount!: string
+
+  @Property({ name: 'vat_rate', type: 'numeric', precision: 7, scale: 4, nullable: true })
+  vatRate?: string | null
+
+  @Property({ type: 'text', nullable: true })
+  reason?: string | null
+
+  @Property({ name: 'issue_date', type: 'date', nullable: true })
+  issueDate?: Date | null
+
+  @Property({ name: 'issued_at', type: Date, nullable: true })
+  issuedAt?: Date | null
+
+  @Property({ name: 'cancelled_at', type: Date, nullable: true })
+  cancelledAt?: Date | null
+
+  @Property({ name: 'created_by', type: 'uuid', nullable: true })
+  createdBy?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date(), nullable: true })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}
+
 @Entity({ tableName: 'freight_document_sequences' })
 @Index({
   name: 'freight_document_sequences_kind_unique_idx',
@@ -1351,5 +1480,6 @@ export const FREIGHT_ENTITIES = [
   FreightDriverRestBreak,
   FreightDriverAlert,
   FreightDriverRating,
+  FreightAdjustmentNote,
   FreightDocumentSequence,
 ] as const

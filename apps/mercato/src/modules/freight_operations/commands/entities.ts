@@ -1,5 +1,6 @@
 import type { CrudEventsConfig, CrudIndexerConfig } from '@open-mercato/shared/lib/crud/types'
 import {
+  FreightAdjustmentNote,
   FreightContract,
   FreightContractRoute,
   FreightDeliveryNote,
@@ -32,6 +33,7 @@ export const FREIGHT_TRIP_ENTITY_ID = 'freight_operations:freight_trip' as const
 export const FREIGHT_ABSTRACT_ENTITY_ID = 'freight_operations:freight_trip_abstract' as const
 export const FREIGHT_PAYMENT_ENTITY_ID = 'freight_operations:freight_payment' as const
 export const FREIGHT_DELIVERY_NOTE_ENTITY_ID = 'freight_operations:freight_delivery_note' as const
+export const FREIGHT_ADJUSTMENT_NOTE_ENTITY_ID = 'freight_operations:freight_adjustment_note' as const
 
 export const freightOrderEvents = makeEvents<FreightOrder>('order')
 export const freightOrderIndexer = makeIndexer<FreightOrder>(FREIGHT_ORDER_ENTITY_ID)
@@ -50,3 +52,6 @@ export const freightAbstractIndexer = makeIndexer<FreightTripAbstract>(FREIGHT_A
 
 export const freightDeliveryNoteEvents = makeEvents<FreightDeliveryNote>('delivery_note')
 export const freightDeliveryNoteIndexer = makeIndexer<FreightDeliveryNote>(FREIGHT_DELIVERY_NOTE_ENTITY_ID)
+
+export const freightAdjustmentNoteEvents = makeEvents<FreightAdjustmentNote>('adjustment_note')
+export const freightAdjustmentNoteIndexer = makeIndexer<FreightAdjustmentNote>(FREIGHT_ADJUSTMENT_NOTE_ENTITY_ID)

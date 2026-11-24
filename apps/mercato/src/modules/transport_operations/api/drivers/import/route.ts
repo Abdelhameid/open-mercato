@@ -1,6 +1,5 @@
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { createDriverSchema } from '../../../data/validators'
-import { TRANSPORT_DRIVER_ENTITY_ID } from '../../../commands/transport'
 import { importBodySchema, importResponseSchema, runTransportImport } from '../../../lib/importRoute'
 
 export const metadata = {
@@ -10,9 +9,10 @@ export const metadata = {
 
 export async function POST(req: Request): Promise<Response> {
   return runTransportImport(req, {
-    resourceKind: TRANSPORT_DRIVER_ENTITY_ID,
+    resourceKind: 'hr_management:hr_driver_profile',
     resourceId: 'import:drivers',
-    commandId: 'transport_operations.drivers.create',
+    // HR owns the register: the importer creates a person record and a driver profile.
+    commandId: 'hr_management.driver_roster.create',
     schema: createDriverSchema,
     failureKey: 'transport_operations.errors.import_row_failed',
     failureFallback: 'The driver could not be imported.',

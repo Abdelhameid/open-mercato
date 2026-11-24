@@ -155,6 +155,8 @@ const settingsResponseSchema = z.object({
   tripNumberPrefix: z.string(),
   abstractNumberPrefix: z.string(),
   deliveryNoteNumberPrefix: z.string(),
+  adjustmentNoteNumberPrefix: z.string(),
+  receiptNumberPrefix: z.string(),
   updatedAt: z.string().nullable(),
 })
 

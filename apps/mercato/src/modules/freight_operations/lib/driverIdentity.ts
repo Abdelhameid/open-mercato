@@ -19,10 +19,10 @@ function readString(value: unknown): string {
 }
 
 /**
- * Resolve the driver record linked to the authenticated staff user. The
- * transport module owns the register, so freight reads it by raw SQL with an
- * explicit tenant/organization scope and tolerates the module being absent –
- * the same pattern as `transportReference.ts`.
+ * Resolve the driver record linked to the authenticated staff user. HR owns the
+ * person and licence, so freight reads `hr_employees` + `hr_driver_profiles` by
+ * raw SQL with an explicit tenant/organization scope and tolerates the module
+ * being absent – the same pattern as `transportReference.ts`.
  */
 export async function resolveDriverForUser(
   em: EntityManager,
@@ -31,9 +31,17 @@ export async function resolveDriverForUser(
 ): Promise<DriverIdentity | null> {
   try {
     const rows = await em.getConnection().execute<Record<string, unknown>[]>(
-      `select id, full_name, phone, status from transport_drivers
-       where tenant_id = ? and organization_id = ? and user_id = ? and deleted_at is null
-       limit 1`,
+      `select p.id, trim(e.first_name || ' ' || e.last_name) as full_name, e.phone,
+              case
+                when e.status in ('suspended', 'terminated') then 'suspended'
+                when e.status = 'on_leave' then 'on_leave'
+                else 'available'
+              end as status
+         from hr_driver_profiles p
+         join hr_employees e on e.id = p.employee_id
+        where p.tenant_id = ? and p.organization_id = ? and e.user_id = ?
+          and p.deleted_at is null and e.deleted_at is null
+        limit 1`,
       [scope.tenantId, scope.organizationId, userId],
     )
     const row = rows[0]

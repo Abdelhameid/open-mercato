@@ -1,6 +1,6 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { raiseTransportError } from './errors'
-import { TransportDriver, TransportRoute, TransportTripSchedule, TransportVehicle } from '../data/entities'
+import { TransportRoute, TransportTripSchedule, TransportVehicle } from '../data/entities'
 
 export type TransportScope = { tenantId: string; organizationId: string }
 
@@ -26,6 +26,58 @@ export type TransportService = {
   getDashboardSummary(scope: TransportScope): Promise<TransportDashboardSummary>
 }
 
+type DriverAvailability = {
+  status: 'available' | 'on_trip' | 'on_leave' | 'suspended'
+  licenseExpiry: string | Date
+}
+
+function isMissingRelationError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  return message.includes('42P01') || /relation .* does not exist/i.test(message)
+}
+
+/**
+ * Driver availability is derived from the HR register: employment status plus
+ * the driver's in-progress trip. HR owns the person and licence; transport only
+ * reads them (tolerating the module being absent, like the freight reference
+ * helpers do).
+ */
+export async function findDriverAvailability(
+  em: EntityManager,
+  scope: TransportScope,
+  driverId: string,
+): Promise<DriverAvailability | null> {
+  try {
+    const rows = await em.getConnection().execute<Array<{ status: DriverAvailability['status']; license_expiry: string | Date }>>(
+      `select p.license_expiry,
+        case
+          when e.status in ('suspended', 'terminated') then 'suspended'
+          when e.status = 'on_leave' then 'on_leave'
+          when exists (
+            select 1 from transport_trip_schedules t
+            where t.driver_id = p.id and t.status = 'in_progress' and t.deleted_at is null
+          ) then 'on_trip'
+          else 'available'
+        end as status
+       from hr_driver_profiles p
+       join hr_employees e
+         on e.id = p.employee_id
+        and e.tenant_id = p.tenant_id
+        and e.organization_id = p.organization_id
+       where p.id = ? and p.tenant_id = ? and p.organization_id = ?
+         and p.deleted_at is null and e.deleted_at is null
+       limit 1`,
+      [driverId, scope.tenantId, scope.organizationId],
+    )
+    const row = rows[0]
+    if (!row) return null
+    return { status: row.status, licenseExpiry: row.license_expiry }
+  } catch (err) {
+    if (isMissingRelationError(err)) return null
+    throw err
+  }
+}
+
 export async function assertTripAssignmentAvailable(
   em: EntityManager,
   input: TripAssignment,
@@ -39,7 +91,7 @@ export async function assertTripAssignmentAvailable(
   const [route, vehicle, driver] = await Promise.all([
     em.findOne(TransportRoute, { ...scoped, id: input.routeId }),
     em.findOne(TransportVehicle, { ...scoped, id: input.vehicleId }),
-    em.findOne(TransportDriver, { ...scoped, id: input.driverId }),
+    findDriverAvailability(em, scope, input.driverId),
   ])
   if (!route) return raiseTransportError(400, 'route_unavailable', 'The selected route is not available.')
   if (!vehicle || vehicle.status !== 'active') {
@@ -70,14 +122,45 @@ export function createTransportService(em: EntityManager): TransportService {
       const base = { tenantId: scope.tenantId, organizationId: scope.organizationId, deletedAt: null }
       const licenseCutoff = new Date()
       licenseCutoff.setDate(licenseCutoff.getDate() + 30)
-      const [activeVehicles, availableDrivers, expiringDriverLicenses, scheduledTrips, tripsInProgress] = await Promise.all([
+      const driverCounts = await (async () => {
+        try {
+          const rows = await em.getConnection().execute<Array<{ available: number; expiring: number }>>(
+            `select
+               count(*) filter (
+                 where e.status = 'active'
+                   and not exists (
+                     select 1 from transport_trip_schedules t
+                     where t.driver_id = p.id and t.status = 'in_progress' and t.deleted_at is null
+                   )
+               )::int as available,
+               count(*) filter (where p.license_expiry <= ?)::int as expiring
+             from hr_driver_profiles p
+             join hr_employees e
+               on e.id = p.employee_id
+              and e.tenant_id = p.tenant_id
+              and e.organization_id = p.organization_id
+             where p.tenant_id = ? and p.organization_id = ?
+               and p.deleted_at is null and e.deleted_at is null`,
+            [licenseCutoff.toISOString().slice(0, 10), scope.tenantId, scope.organizationId],
+          )
+          return { available: Number(rows[0]?.available ?? 0), expiring: Number(rows[0]?.expiring ?? 0) }
+        } catch (err) {
+          if (isMissingRelationError(err)) return { available: 0, expiring: 0 }
+          throw err
+        }
+      })()
+      const [activeVehicles, scheduledTrips, tripsInProgress] = await Promise.all([
         em.count(TransportVehicle, { ...base, status: 'active' }),
-        em.count(TransportDriver, { ...base, status: 'available' }),
-        em.count(TransportDriver, { ...base, licenseExpiry: { $lte: licenseCutoff } }),
         em.count(TransportTripSchedule, { ...base, status: 'scheduled' }),
         em.count(TransportTripSchedule, { ...base, status: 'in_progress' }),
       ])
-      return { activeVehicles, availableDrivers, expiringDriverLicenses, scheduledTrips, tripsInProgress }
+      return {
+        activeVehicles,
+        availableDrivers: driverCounts.available,
+        expiringDriverLicenses: driverCounts.expiring,
+        scheduledTrips,
+        tripsInProgress,
+      }
     },
   }
 }

@@ -15,6 +15,7 @@ import { amountToString, computeLineEnvelope, sumEnvelopes } from './money'
 export type FreightDraftLineInput = {
   name: string
   description?: string | null
+  productId?: string | null
   netAmount: string | number
   taxRatePercent: string | number | null | undefined
   metadata?: Record<string, unknown> | null
@@ -23,6 +24,7 @@ export type FreightDraftLineInput = {
 export type FreightDraftLine = {
   name: string
   description?: string
+  productId?: string
   quantity: string
   unitPriceNet: string
   taxRate: string
@@ -47,6 +49,7 @@ export function buildInvoiceDraft(lines: FreightDraftLineInput[], fallbackTaxRat
     return {
       name: line.name,
       ...(line.description ? { description: line.description } : {}),
+      ...(line.productId ? { productId: line.productId } : {}),
       quantity: '1',
       unitPriceNet: amountToString(envelope.net),
       taxRate: amountToString(Number(rate)),

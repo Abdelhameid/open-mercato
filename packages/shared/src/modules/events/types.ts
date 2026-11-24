@@ -108,6 +108,12 @@ export interface EventPayload {
 export interface EmitOptions {
   /** If true, the event will be persisted to a queue for async processing */
   persistent?: boolean
+  /**
+   * On a persistent emit, skip inline subscriber delivery and let the events
+   * worker own it. Keeps heavy jobs off the request path and avoids running a
+   * persistent subscriber twice (inline + queued).
+   */
+  deliverInline?: boolean
   /** Trusted tenant scope forwarded to subscribers separately from the payload */
   tenantId?: string | null
   /** Trusted organization scope forwarded to subscribers separately from the payload */

@@ -96,65 +96,6 @@ export class TransportVehicle {
   deletedAt?: Date | null
 }
 
-@Entity({ tableName: 'transport_drivers' })
-@Index({ name: 'transport_drivers_tenant_org_idx', properties: ['tenantId', 'organizationId'] })
-@Index({ name: 'transport_drivers_status_idx', properties: ['organizationId', 'status'] })
-@Index({ name: 'transport_drivers_national_id_unique_idx', properties: ['organizationId', 'tenantId', 'nationalId'], options: { unique: true, where: 'deleted_at IS NULL' } })
-@Index({ name: 'transport_drivers_license_unique_idx', properties: ['organizationId', 'tenantId', 'licenseNumber'], options: { unique: true, where: 'deleted_at IS NULL' } })
-@Index({
-  name: 'transport_drivers_user_unique_idx',
-  expression:
-    'create unique index "transport_drivers_user_unique_idx" on "transport_drivers" ("organization_id", "tenant_id", "user_id") where user_id is not null and deleted_at is null',
-})
-export class TransportDriver {
-  [OptionalProps]?: 'status' | 'createdAt' | 'updatedAt' | 'deletedAt'
-
-  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
-  id!: string
-
-  @Property({ name: 'tenant_id', type: 'uuid' })
-  tenantId!: string
-
-  @Property({ name: 'organization_id', type: 'uuid' })
-  organizationId!: string
-
-  @Property({ name: 'employee_id', type: 'uuid', nullable: true })
-  employeeId?: string | null
-
-  @Property({ name: 'user_id', type: 'uuid', nullable: true })
-  userId?: string | null
-
-  @Property({ name: 'full_name', type: 'text' })
-  fullName!: string
-
-  @Property({ name: 'national_id', type: 'text' })
-  nationalId!: string
-
-  @Property({ name: 'license_number', type: 'text' })
-  licenseNumber!: string
-
-  @Property({ name: 'license_expiry', type: 'date' })
-  licenseExpiry!: Date
-
-  @Property({ type: 'text' })
-  phone!: string
-
-  @Enum({ items: [...DRIVER_STATUSES], type: 'text', name: 'status', default: 'available' })
-  status: DriverStatus = 'available'
-
-  @Property({ name: 'created_by', type: 'uuid', nullable: true })
-  createdBy?: string | null
-
-  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
-  createdAt: Date = new Date()
-
-  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
-  updatedAt: Date = new Date()
-
-  @Property({ name: 'deleted_at', type: Date, nullable: true })
-  deletedAt?: Date | null
-}
-
 @Entity({ tableName: 'transport_routes' })
 @Index({ name: 'transport_routes_tenant_org_idx', properties: ['tenantId', 'organizationId'] })
 @Index({ name: 'transport_routes_code_unique_idx', properties: ['organizationId', 'tenantId', 'code'], options: { unique: true, where: 'deleted_at IS NULL' } })

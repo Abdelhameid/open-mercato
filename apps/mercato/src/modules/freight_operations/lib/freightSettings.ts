@@ -30,6 +30,8 @@ export type FreightSettings = {
   tripNumberPrefix: string
   abstractNumberPrefix: string
   deliveryNoteNumberPrefix: string
+  adjustmentNoteNumberPrefix: string
+  receiptNumberPrefix: string
 }
 
 export const FREIGHT_SETTINGS_DEFAULTS: FreightSettings = {
@@ -45,6 +47,8 @@ export const FREIGHT_SETTINGS_DEFAULTS: FreightSettings = {
   tripNumberPrefix: 'FT',
   abstractNumberPrefix: 'FA',
   deliveryNoteNumberPrefix: 'DN',
+  adjustmentNoteNumberPrefix: 'AN',
+  receiptNumberPrefix: 'RV',
 }
 
 export type FreightSettingsScope = {
@@ -73,6 +77,9 @@ export function mergeFreightSettings(value: unknown): FreightSettings {
     abstractNumberPrefix: stored.abstractNumberPrefix ?? FREIGHT_SETTINGS_DEFAULTS.abstractNumberPrefix,
     deliveryNoteNumberPrefix:
       stored.deliveryNoteNumberPrefix ?? FREIGHT_SETTINGS_DEFAULTS.deliveryNoteNumberPrefix,
+    adjustmentNoteNumberPrefix:
+      stored.adjustmentNoteNumberPrefix ?? FREIGHT_SETTINGS_DEFAULTS.adjustmentNoteNumberPrefix,
+    receiptNumberPrefix: stored.receiptNumberPrefix ?? FREIGHT_SETTINGS_DEFAULTS.receiptNumberPrefix,
   }
 }
 

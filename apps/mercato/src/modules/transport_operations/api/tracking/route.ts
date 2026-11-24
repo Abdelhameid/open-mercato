@@ -71,7 +71,8 @@ export async function GET(req: Request) {
     const vehicles = await em.getConnection().execute<VehicleRow[]>(
       `select v.id, v.plate_number, v.make, v.model, v.vehicle_type, v.status,
               p.latitude, p.longitude, p.speed_kph, p.heading, p.recorded_at,
-              p.driver_id, d.full_name as driver_name
+              p.driver_id,
+              nullif(trim(concat_ws(' ', de.first_name, de.last_name)), '') as driver_name
          from transport_vehicles v
          left join lateral (
            select pos.latitude, pos.longitude, pos.speed_kph, pos.heading, pos.recorded_at, pos.driver_id
@@ -80,7 +81,8 @@ export async function GET(req: Request) {
             order by pos.recorded_at desc
             limit 1
          ) p on true
-         left join transport_drivers d on d.id = p.driver_id
+         left join hr_driver_profiles d on d.id = p.driver_id
+         left join hr_employees de on de.id = d.employee_id
         where v.tenant_id = ? and v.organization_id = ? and v.deleted_at is null
         order by v.plate_number asc`,
       [auth.tenantId, organizationId],
@@ -109,10 +111,13 @@ export async function GET(req: Request) {
     let alerts: AlertRow[] = []
     try {
       alerts = await em.getConnection().execute<AlertRow[]>(
-        `select a.id, a.driver_id, d.full_name as driver_name, a.trip_id, a.order_id,
+        `select a.id, a.driver_id,
+                nullif(trim(concat_ws(' ', de.first_name, de.last_name)), '') as driver_name,
+                a.trip_id, a.order_id,
                 a.latitude, a.longitude, a.note, a.created_at
            from freight_driver_alerts a
-           left join transport_drivers d on d.id = a.driver_id
+           left join hr_driver_profiles d on d.id = a.driver_id
+           left join hr_employees de on de.id = d.employee_id
           where a.tenant_id = ? and a.organization_id = ?
             and a.created_at > now() - interval '24 hours'
           order by a.created_at desc

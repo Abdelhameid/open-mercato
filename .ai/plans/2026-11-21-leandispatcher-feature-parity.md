@@ -1,7 +1,7 @@
 # LeanDispatcher feature parity — gap matrix and program plan
 
 **Created:** 2026-11-21
-**Status:** Active — Phases 1–5 core implemented; Phase 6 partial; provider-gated items pending
+**Status:** Active — Phases 1–5 core implemented; Phase 6 largely implemented (credit/debit notes, product links, Gulf currencies); provider-gated items pending
 **Source of truth for the comparison:** LeanDispatcher marketing site
 (`https://leandispatcher.ertikaz-tech.com/`, feature copy extracted from its production JS
 bundle), its App Store listing, and a read-only audit of this repository on 2026-11-21.
@@ -43,7 +43,7 @@ external providers (TGA/Bayan, SMS, maps, telematics) and are explicitly gated.
 | Long-term contracts with negotiated per-route rates | **Shipped** | `FreightContract` + `FreightContractRoute` |
 | Vehicle types and plates | **Partial** | Plates are first-class and unique; vehicle type is free text |
 | Bulk driver/vehicle upload | **Shipped (Phase 6)** | CSV/XLSX dry-run/commit importer on both transport list screens |
-| Products with weight/package units | **Partial** | Catalog has weight/dimensions/units; no package hierarchy; freight cargo is free text |
+| Products with weight/package units | **Partial (Phase 6)** | Freight orders link a catalog product + package count and copy the product onto the invoice line; catalog package hierarchy is still deferred |
 | Order sealing | **Partial** | Seal number captured on the delivery note; no order/trip seal lifecycle |
 | Late/completed trips visually flagged | **Partial** | Statuses exist; no lateness calculation or colour rule |
 | Dashboard totals (orders, trips, vehicles, waybills) | **Partial** | Freight/transport/fleet dashboards exist; no waybill KPI yet |
@@ -59,14 +59,14 @@ external providers (TGA/Bayan, SMS, maps, telematics) and are explicitly gated.
 | Direct Bayan/TGA API integration | **External gate** | Needs TGA approval and credentials; adapter seam is ready |
 | TGA/Bayan logos on documents | **Intentionally not used** | No authorisation to reproduce official marks |
 | Print / hand-over receipt | **Shipped (Phase 1)** | Browser print layout with signature lines |
-| Public share link for a document | **Missing** | Attachments/documents have no anonymous share token |
+| Public share link for a document | **Shipped (Phase 5)** | `/track/note/<token>` public delivery-note page + staff "Copy share link" action; token minted on demand, limited projection |
 
 ### Driver workflow
 
 | LeanDispatcher capability | Our status | Evidence / gap |
 |---|---|---|
 | Dedicated driver app (Android/iOS) | **Partial (Phase 3)** | Staff-linked driver PWA at `/backend/driver`; no native shell/offline |
-| Driver sees assigned deliveries and navigates to pickup/drop-off | **Partial (Phase 3)** | Assigned orders/trips list exists; navigation links are not shipped |
+| Driver sees assigned deliveries and navigates to pickup/drop-off | **Shipped (Phase 3)** | Assigned orders/trips list with Google Maps and Waze deep links for pickup/drop-off and origin/destination |
 | Driver changes order status from the road | **Shipped (Phase 3)** | Driver start/deliver actions with ownership checks |
 | Driver checklist with required attachments | **Missing** | No checklist model |
 | POD/POP photo, signature, voice note or video capture | **Partial** | Fields accept attachment ids; no capture/upload flow |
@@ -92,7 +92,7 @@ external providers (TGA/Bayan, SMS, maps, telematics) and are explicitly gated.
 | Customer portal to raise and schedule orders | **Shipped (Phase 2)** | Portal submit endpoint + External Orders queue |
 | Customer order approval queue (“External Orders”) | **Shipped (Phase 2)** | Submitted → approved/rejected review queue at `/backend/freight/external-orders` |
 | Customer tracking link | **Shipped (Phase 5)** | `/track/<token>` public status page + copy action |
-| Customer views contracts and invoices | **Missing** | Program spec aspires to it; only abstracts shipped |
+| Customer views contracts and invoices | **Shipped (Phase 5)** | `/portal/freight/contracts` (contracts + negotiated route rates) and `/portal/freight/invoices` (sales invoices reached through the order); both RBAC-gated by `portal.freight.view` |
 | Customer approves/disputes trip abstracts | **Shipped** | `api/portal/freight/abstracts/*` + portal pages |
 | Automated customer SMS/WhatsApp on delivery time, bill, waybill | **Partial** | WhatsApp adapter + notifications exist; no freight subscriber, no SMS adapter |
 | Instant document sharing via SMS/WhatsApp/link | **Partial (Phase 5)** | Order tracking links ship; public delivery-note links and messaging remain |
@@ -104,15 +104,15 @@ external providers (TGA/Bayan, SMS, maps, telematics) and are explicitly gated.
 | LeanDispatcher capability | Our status | Evidence / gap |
 |---|---|---|
 | ZATCA e-invoicing (Phase 2 issuance, VAT) | **Shipped** | `saudi_localization` + financial posting; signing/CSID gated |
-| Invoices, receipts, credit/debit notes, receipt vouchers | **Partial** | Sales invoices + credit memos + AP; freight has no credit/debit-note path; no receipt voucher document |
+| Invoices, receipts, credit/debit notes, receipt vouchers | **Shipped (Phase 6)** | Freight credit/debit notes issue and post/reverse in the GL; every freight payment allocates an `RV-` receipt number and prints from `/backend/freight/payments/<id>/receipt` |
 | Automatic billing and settlement | **Shipped** | Freight abstracts → sales invoice → payments → AR aging |
 | Customer statements | **Shipped** | `financial` AR statements |
 | Inventory, warehouses | **Shipped** | Core `wms` (inventory, lots, movements, locations) |
-| Purchasing / purchase orders | **Missing** | WMS phase 2 is still draft; no procurement module |
+| Purchasing / purchase orders | **Decision (Phase 6)** | Use `financial` AP vendor invoices + expense lines for the pilot; a dedicated PO/procurement module is deferred until three-way matching or stock purchasing is required |
 | Sales | **Shipped** | Core `sales` |
 | Expenses | **Partial** | AP vendor-invoice expense lines; no expense-claim module |
 | Fleet maintenance / fuel / insurance / violations | **Shipped** | `fleet_operations` |
-| 11 currencies / multi-currency | **Partial** | 11 seeded currencies incl. SAR; FX still posts at rate 1 |
+| 11 currencies / multi-currency | **Partial (Phase 6)** | USD/EUR/SAR plus AED, KWD, BHD, OMR and QAR seeded; FX still posts at rate 1 |
 | Per-user permissions | **Shipped** | Role + user ACLs, feature wildcards |
 | Customisable field labels | **Partial** | Custom fields carry labels; built-in UI labels are not tenant-renamable |
 | API integrations with ERPs | **Shipped** | API keys, OpenAPI, webhooks, `data_sync` |
@@ -165,23 +165,39 @@ external providers (TGA/Bayan, SMS, maps, telematics) and are explicitly gated.
 
 ### Phase 5 — Customer experience
 
-1. Portal order creation, tracking, contract/invoice views and delivery-note download.
+1. Portal order creation, tracking, contract/invoice views and delivery-note download —
+   **shipped**: orders and abstracts (earlier phases), contracts and invoices 2026-11-24.
 2. Tokenised public tracking page for customers without a portal account.
 3. Automated event-driven customer messages (SMS/WhatsApp) for assignment, dispatch,
    delivery ETA and waybill sharing; requires an SMS provider and template management.
-4. Document share links with expiring tokens.
-5. Driver rating and customer feedback on delivered orders.
+4. Document share links with expiring tokens — **delivery-note share links shipped
+   2026-11-24** (`share_token`, staff mint/reuse action, `/track/note/<token>`
+   public document, limited projection). Expiring/rotating tokens remain a
+   hardening option.
+5. Driver rating and customer feedback on delivered orders — shipped 2026-11-22.
 
 ### Phase 6 — Remaining parity and polish
 
-1. Freight credit/debit notes and receipt vouchers, reusing the sales credit-memo contract.
-2. Add SAR (and the other Gulf currencies LeanDispatcher lists) to the currency seed.
-3. Purchasing/PO and a lightweight expense-claim module, or an explicit decision to use AP
-   vendor invoices only.
-4. Product/package links on freight orders (catalog product + package units).
-5. Bulk driver/vehicle import.
-6. Tenant-renamable built-in labels and additional locales (UR/HI/ZH) if the market needs
-   them.
+1. Freight credit/debit notes — **shipped 2026-11-23**: draft → issued → cancelled state
+   machine, sequential `AN-` numbering, per-tenant prefix setting, list/create/edit
+   screens, and an event-driven GL posting (credit reduces revenue/VAT/AR; debit
+   increases them; cancelling reverses the entry). Posting needs an open
+   accounting period on the note's issue date; a cancellation reverses on the
+   current date, so the current month must also be open. Receipt vouchers —
+   **shipped 2026-11-24**: each freight payment allocates an `RV-` receipt
+   number inside the recording transaction and prints from a dedicated receipt
+   page.
+2. SAR and Gulf currencies — **shipped 2026-11-23**: AED, KWD, BHD, OMR and QAR added
+   to the seed (SAR was already present).
+3. Purchasing/PO — **decision 2026-11-23**: use AP vendor invoices + expense lines for
+   the pilot; a PO/procurement module is deferred until three-way matching or stock
+   purchasing is required.
+4. Product/package links on freight orders — **shipped 2026-11-23**: a catalog product
+   combobox and package count on the order, with the product copied onto the sales
+   invoice line. Catalog package hierarchy remains deferred.
+5. Bulk driver/vehicle import — **shipped 2026-11-22**.
+6. Tenant-renamable built-in labels and additional locales (UR/HI/ZH) — deferred; not
+   needed for the Saudi pilot.
 
 ## External gates
 
@@ -196,11 +212,19 @@ external providers (TGA/Bayan, SMS, maps, telematics) and are explicitly gated.
 
 ## Recommendation
 
-The core dispatch loop (intake → trip → delivery note → tracking → rating) is now in place.
-The next slice is Phase 6: freight credit/debit notes, purchasing/expenses, product/package
-links and bulk driver/vehicle import. Geofencing and predictive alerts complete Phase 4, and
-the provider-gated work (TGA Bayan, SMS, maps key, telematics) should start only once the
+The core dispatch loop (intake → trip → delivery note → tracking → rating) is in place, and
+Phase 6 is largely closed: credit/debit notes, product/package links, Gulf currencies and
+bulk imports, receipt vouchers and the portal contract/invoice views are shipped. The
+remaining product work is depth rather than parity: geofencing and predictive alerts
+(Phase 4), checklist templates and POD capture (Phase 3), automated customer messages and
+expiring document share links (Phase 5), and tenant-renamable labels.
+Provider-gated work (TGA Bayan, SMS, maps key, telematics) should start only once the
 corresponding business approvals are in hand.
+
+The 2026-11-23 consolidation pass also made HR the single driver/person register, linked the
+freight trip to the transport schedule, unified insurance expiry on the policy master and
+made the transport odometer register authoritative. See
+[`2026-11-23-resource-register-consolidation.md`](../specs/2026-11-23-resource-register-consolidation.md).
 
 ## Changelog
 
@@ -227,3 +251,39 @@ corresponding business approvals are in hand.
   commands. The dependency-free spreadsheet reader moved to
   `@open-mercato/shared/lib/browser/spreadsheet` for both modules. Spec:
   `2026-11-22-transport-bulk-import.md`; coverage: TC-TRANSPORT-015 plus new parser unit suites.
+- **2026-11-23 (consolidation + Phase 6)** — HR became the single driver/person register
+  (`transport_drivers` backfilled and dropped; transport API preserved; transport screen is a
+  projection; bulk import writes HR records). The freight trip link to the transport schedule
+  is validated, uniquely indexed and status-mirrored. Insurance expiry is owned solely by the
+  policy master; odometer readings from rentals/fuel/work orders advance the transport register
+  via events; HR exposes the staff `userId` link and leads the nav. Phase 6 shipped freight
+  credit/debit notes with GL posting/reversal (`AN-` numbering, list/create/edit screens),
+  catalog product + package links on freight orders (copied to the invoice line), and the Gulf
+  currencies. Driver navigation deep links (Google Maps/Waze) shipped. Purchasing uses AP
+  vendor invoices (decision). Specs:
+  `2026-11-23-hr-driver-register-consolidation.md`,
+  `2026-11-23-resource-register-consolidation.md`; coverage: TC-HR-009, TC-FREIGHT-018,
+  driver-roster/odometer/posting unit suites.
+- **2026-11-24 (validation)** — `TC-FREIGHT-018` passes end-to-end: the note
+  issues with an `AN-` number, a balanced standard GL entry is posted, cancelling
+  marks it cancelled and posts the balanced reversing entry. `TC-RENTAL-001`
+  passes after correcting its stale test inputs (two-day window billed as three
+  inclusive days; the overlap test now uses a driverless contract). The full app
+  unit suite (1,249), typecheck, lint (0 errors), i18n sync, `build:packages` and
+  `build:app` are green. Local migrations applied after
+  `.mercato/backups/driver-consolidation-before.sql`.
+- **2026-11-24 (Phase 5)** — Public delivery-note share links shipped:
+  `freight_delivery_notes.share_token`, staff mint/reuse command and "Copy share
+  link" row action, unauthenticated `/api/freight_operations/public/delivery-note`
+  limited projection, and the print-friendly `/track/note/<token>` page.
+  `TC-FREIGHT-019` passes. Spec: `2026-11-24-delivery-note-share-links.md`.
+- **2026-11-24 (Phase 6)** — Receipt vouchers shipped: `freight_payments.receipt_number`
+  (unique per tenant/org, `RV-` prefix from settings) is allocated inside the payment
+  recording transaction and printed from `/backend/freight/payments/<id>/receipt`.
+  `TC-FREIGHT-005` asserts the `RV-#####` number.
+- **2026-11-24 (Phase 5)** — Portal contract and invoice views shipped:
+  `/api/portal/freight/contracts` (active/suspended/terminated contracts with their
+  negotiated route rates) and `/api/portal/freight/invoices` (the customer's sales
+  invoices, reached through the sales order). Both require `portal.freight.view` and
+  appear in the portal nav (orders 61/62); `TC-FREIGHT-020` covers visibility and the
+  403 for a role without the feature.

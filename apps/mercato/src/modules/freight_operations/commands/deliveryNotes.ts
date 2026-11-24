@@ -31,6 +31,7 @@ import {
 } from '../lib/deliveryNote'
 import { findTransportDriver, findTransportVehicle } from '../lib/transportReference'
 import { readSaudiVatSettings } from '../../saudi_localization/lib/vat-settings'
+import { createTrackingToken } from '../lib/trackingToken'
 import { emitFreightEvent } from '../events'
 
 function compact(input: Record<string, unknown>): Record<string, unknown> {
@@ -477,7 +478,41 @@ const recordExternalWaybillCommand: CommandHandler<RecordExternalWaybillInput, {
   },
 }
 
+const shareDeliveryNoteCommand: CommandHandler<{ id: string }, { deliveryNoteId: string; token: string }> = {
+  id: 'freight_operations.delivery_notes.share',
+  async execute(rawInput, ctx) {
+    const input = deliveryNoteActionSchema.parse(rawInput)
+    const scope = resolveScope(ctx)
+    const em = entityManager(ctx)
+    const note = await em.transactional(async (tx) => {
+      const locked = await findDeliveryNoteForUpdate(ctx, tx, scope, input.id)
+      if (locked.status !== 'issued' && locked.status !== 'delivered') {
+        return raiseFreightError(409, 'delivery_note_not_shareable', 'Only issued or delivered notes can be shared.')
+      }
+      if (!locked.shareToken) {
+        locked.shareToken = createTrackingToken()
+        locked.updatedAt = new Date()
+        await tx.persist(locked).flush()
+      }
+      return locked
+    })
+    await emitDeliveryNoteUpdate(ctx, note, scope)
+    return { deliveryNoteId: note.id, token: note.shareToken ?? '' }
+  },
+  buildLog: ({ input, ctx }) => {
+    const scope = resolveScope(ctx)
+    return {
+      actionLabel: 'Share delivery note',
+      resourceKind: FREIGHT_DELIVERY_NOTE_ENTITY_ID,
+      resourceId: input.id,
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+    }
+  },
+}
+
 registerCommand(issueDeliveryNoteCommand)
 registerCommand(deliverDeliveryNoteCommand)
 registerCommand(cancelDeliveryNoteCommand)
 registerCommand(recordExternalWaybillCommand)
+registerCommand(shareDeliveryNoteCommand)

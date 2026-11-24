@@ -44,8 +44,8 @@ import { financialEntryEvents, financialEntryIndexer } from './ledger'
  * previous entry before posting the new one.
  */
 
-const POSTING_SETTINGS_MODULE = 'financial'
-const POSTING_SETTINGS_KEY = 'posting'
+export const POSTING_SETTINGS_MODULE = 'financial'
+export const POSTING_SETTINGS_KEY = 'posting'
 
 export const salesDocumentPostingSchema = z.object({
   tenantId: z.string().uuid(),
@@ -64,7 +64,7 @@ export type SalesDocumentPostingResult = {
   reversalId: string | null
 }
 
-type PostingScope = { tenantId: string; organizationId: string }
+export type PostingScope = { tenantId: string; organizationId: string }
 
 type InvoiceRow = {
   invoice_number: string | null
@@ -139,7 +139,7 @@ async function resolveTaxContext(
   }
 }
 
-async function loadPostingAccounts(
+export async function loadPostingAccounts(
   em: EntityManager,
   scope: PostingScope,
   settings: PostingSettings,

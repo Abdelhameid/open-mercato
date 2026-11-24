@@ -127,6 +127,50 @@ export default function DeliveryNotesTable() {
     }
   }, [confirm, query, retryLastMutation, runMutation, t])
 
+  const shareNote = React.useCallback(async (note: FreightDeliveryNoteRow) => {
+    let sharePath = ''
+    try {
+      await runMutation<Awaited<ReturnType<typeof apiCallOrThrow>>>({
+        operation: async () => {
+          const call = await withScopedApiRequestHeaders(
+            buildOptimisticLockHeader(note.updatedAt ?? note.updated_at ?? null),
+            () => apiCallOrThrow<{ path?: string }>(`/api/${RESOURCE}/share`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ id: note.id }),
+            }, {
+              errorMessage: t('freight_operations.delivery_notes.share.error', 'Unable to create the share link.'),
+            }),
+          )
+          sharePath = call.result?.path ?? ''
+          return call
+        },
+        mutationPayload: { operation: 'delivery_notes.share', id: note.id, updatedAt: note.updatedAt ?? null },
+        context: {
+          formId: CONTEXT_ID,
+          resourceKind: ENTITY_ID,
+          resourceId: note.id,
+          retryLastMutation,
+        },
+      })
+      if (!sharePath) throw new Error('[internal] share path missing')
+      const url = `${window.location.origin}${sharePath}`
+      try {
+        await navigator.clipboard.writeText(url)
+        flash(t('freight_operations.delivery_notes.share.copied', 'Share link copied to the clipboard.'), 'success')
+      } catch {
+        flash(url, 'success')
+      }
+    } catch (error) {
+      flash(
+        error instanceof Error && error.message
+          ? error.message
+          : t('freight_operations.delivery_notes.share.error', 'Unable to create the share link.'),
+        'error',
+      )
+    }
+  }, [retryLastMutation, runMutation, t])
+
   const columns = React.useMemo<ColumnDef<FreightDeliveryNoteRow>[]>(() => [
     {
       accessorKey: 'note_number',
@@ -266,6 +310,9 @@ export default function DeliveryNotesTable() {
                 : []),
               ...(row.status === 'draft' || row.status === 'issued'
                 ? [{ id: 'cancel', label: t('freight_operations.delivery_notes.actions.cancel', 'Cancel'), onSelect: () => openAction(row, 'cancel') }]
+                : []),
+              ...(row.status === 'issued' || row.status === 'delivered'
+                ? [{ id: 'share', label: t('freight_operations.delivery_notes.actions.share', 'Copy share link'), onSelect: () => { void shareNote(row) } }]
                 : []),
             ]}
           />

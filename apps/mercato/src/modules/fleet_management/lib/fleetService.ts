@@ -191,7 +191,13 @@ export async function getFleetDashboardSummary(
          )`,
       ),
       countTransportVehicles(em, scope, `tv.status = 'maintenance'`),
-      em.count(FleetVehicleDocument, { ...base, expiryDate: { $lte: expiryCutoff, $ne: null } }),
+      // Insurance expiry is owned by `fleet_operations` (`fleet_insurance_policies`);
+      // the fleet document row is the scan, not a second compliance clock.
+      em.count(FleetVehicleDocument, {
+        ...base,
+        documentType: { $ne: 'insurance' },
+        expiryDate: { $lte: expiryCutoff, $ne: null },
+      }),
       em.count(FleetVehicleAssignment, { ...base, status: 'active' }),
       em.count(FleetVehicleAssignment, { ...base, status: 'active', dueReturnAt: { $lt: now, $ne: null } }),
       em.getConnection().execute<Array<{ count: unknown }>>(

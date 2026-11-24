@@ -41,6 +41,53 @@ Each flow names the spec that covers it. They must be green in CI before the pil
 13. **Rental return → invoice** — extend `vehicle_rentals/__integration__/TC-RENTAL-001` or add the invoice assertion to the same fixture
 14. **Student subscription → invoice period** — extend `student_transport/__integration__/TC-STUDENT-001`
 
+## 2026-11-23 consolidation pass
+
+- **HR driver register** executed locally: `transport_drivers` was backfilled into
+  `hr_employees` + `hr_driver_profiles`, every `driver_id` reference was repointed
+  (0 unknown after the migration), and the duplicate table was dropped. Backup:
+  `.mercato/backups/driver-consolidation-before.sql`.
+- **Operator actions after deploy:**
+  - `yarn mercato auth sync-role-acls` — roles with explicit feature lists need the
+    new `freight.adjustment_notes.manage` feature (`freight.*` admins already have it).
+  - Reindex the HR driver register:
+    `yarn mercato query_index rebuild --entity hr_management:hr_driver_profile --global`.
+    The migration purges the retired `transport_operations:transport_driver` docs.
+  - The credit/debit-note ledger posting needs the financial posting accounts
+    (AR, revenue, output VAT) configured; without them the note still issues, but
+    the posting subscriber logs a 409 and skips the entry.
+  - Keep an **open accounting period covering today**. The note posts on its
+    issue date and a cancellation posts its reversal on the current date; a
+    missing period leaves the note issued without a ledger entry (the subscriber
+    logs `posting_period_missing` and the worker job completes).
+- **Gates on 2026-11-23/24:** `yarn generate`, `yarn db:generate`,
+  `yarn typecheck`, `yarn lint` (0 errors), `yarn i18n:check-sync`,
+  `yarn build:app`, `yarn build:packages` and the full app unit suite
+  (1,249 tests) are green. Integration results:
+  - `TC-HR-009` (driver register) passed end-to-end.
+  - `TC-TRANSPORT-001/002`, `TC-FREIGHT-013/015` passed in the affected batch.
+  - `TC-FREIGHT-018` passed: a note issues, posts a balanced standard entry,
+    cancels and posts the reversing entry.
+  - `TC-RENTAL-001` passed after correcting its test inputs (it previously
+    expected three billed days from a two-day window and used a with-driver
+    contract without a driver).
+  - `TC-FREIGHT-005` asserts the new `RV-#####` receipt number on a recorded
+    payment; `TC-FREIGHT-019` covers the public delivery-note share link.
+  - `TC-FREIGHT-020` covers the portal contract/invoice views and the 403 for
+    a customer role without `portal.freight.view`.
+  - The first attempts timed out because the dev runtime was serving stale
+    generated chunks/worker registries. A clean `yarn dev` restart picks up new
+    commands, subscribers and pages; production deploys start fresh.
+  - The worker's local queue did not restart itself after a manual kill; in dev,
+    restart the runtime (or start `yarn mercato queue worker --all
+    --with-scheduler`) so persistent subscribers run.
+- **Remaining duplication decision:** the core `staff` team-member/leave roster
+  is not removed yet. HR now exposes the shared `userId` link and leads the nav;
+  a durable roster link is documented in
+  `.ai/specs/2026-11-23-resource-register-consolidation.md`. Disabling staff
+  without that link would break time tracking, planner availability and
+  warranty-claim assignment.
+
 ## Deployment (Railway)
 
 Follow `.ai/specs/2026-05-12-railway-one-command-deploy.md` and `apps/docs/docs/deployment/railway.mdx`.

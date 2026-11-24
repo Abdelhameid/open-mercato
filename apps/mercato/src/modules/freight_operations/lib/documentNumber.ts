@@ -19,6 +19,10 @@ export function numberPrefix(kind: DocumentSequenceKind, settings: FreightSettin
       return settings.abstractNumberPrefix
     case 'delivery_note':
       return settings.deliveryNoteNumberPrefix
+    case 'adjustment_note':
+      return settings.adjustmentNoteNumberPrefix
+    case 'receipt_voucher':
+      return settings.receiptNumberPrefix
   }
 }
 

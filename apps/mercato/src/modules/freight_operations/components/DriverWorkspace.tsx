@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from 'react'
-import { AlertTriangle, Coffee, MapPin, Play, Square, Truck } from 'lucide-react'
+import { AlertTriangle, Coffee, MapPin, Navigation, Play, Square, Truck } from 'lucide-react'
 import { Page, PageBody, PageHeader } from '@open-mercato/ui/backend/Page'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -63,6 +63,33 @@ type DeliverTarget = {
   id: string
   label: string
   updatedAt?: string | null
+}
+
+function navigationHref(location: string, provider: 'google' | 'waze'): string {
+  const destination = encodeURIComponent(location)
+  return provider === 'waze'
+    ? `https://waze.com/ul?q=${destination}&navigate=yes`
+    : `https://www.google.com/maps/dir/?api=1&destination=${destination}`
+}
+
+function NavigationLinks({ location, label }: { location: string; label: string }) {
+  const t = useT()
+  if (!location.trim()) return null
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button asChild variant="outline" size="sm">
+        <a href={navigationHref(location, 'google')} target="_blank" rel="noopener noreferrer">
+          <Navigation aria-hidden className="me-2 size-4" />
+          {label}
+        </a>
+      </Button>
+      <Button asChild variant="outline" size="sm">
+        <a href={navigationHref(location, 'waze')} target="_blank" rel="noopener noreferrer">
+          {t('freight_operations.driver.openWaze', 'Waze')}
+        </a>
+      </Button>
+    </div>
+  )
 }
 
 function DriverPwaBootstrap() {
@@ -208,6 +235,10 @@ export default function DriverWorkspace() {
                   <p className="text-xs text-muted-foreground">
                     {t('freight_operations.driver.pickup', 'Pickup')}: {formatFreightDate(order.requestedPickupAt, locale)}
                   </p>
+                  <div className="mt-2 flex flex-col gap-2">
+                    <NavigationLinks location={order.pickupLocation} label={t('freight_operations.driver.routeToPickup', 'Route to pickup')} />
+                    <NavigationLinks location={order.dropoffLocation} label={t('freight_operations.driver.routeToDropoff', 'Route to drop-off')} />
+                  </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {order.status === 'assigned' ? (
                       <Button
@@ -256,6 +287,10 @@ export default function DriverWorkspace() {
                   <p className="text-xs text-muted-foreground">
                     {t('freight_operations.driver.executionDate', 'Execution date')}: {formatFreightDate(trip.executionDate, locale)}
                   </p>
+                  <div className="mt-2 flex flex-col gap-2">
+                    <NavigationLinks location={trip.origin} label={t('freight_operations.driver.routeToOrigin', 'Route to origin')} />
+                    <NavigationLinks location={trip.destination} label={t('freight_operations.driver.routeToDestination', 'Route to destination')} />
+                  </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {trip.executionStatus === 'planned' || trip.executionStatus === 'dispatched' ? (
                       <Button

@@ -6,15 +6,9 @@ import { emitCrudSideEffects } from '@open-mercato/shared/lib/commands/helpers'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import { z } from 'zod'
-import { TransportDriver, TransportTripSchedule } from '../data/entities'
+import { TransportTripSchedule } from '../data/entities'
 import { raiseTransportError } from '../lib/errors'
-import {
-  TRANSPORT_TRIP_ENTITY_ID,
-  transportDriverEvents,
-  transportDriverIndexer,
-  transportTripEvents,
-  transportTripIndexer,
-} from './transport'
+import { TRANSPORT_TRIP_ENTITY_ID, transportTripEvents, transportTripIndexer } from './transport'
 
 export const cancelTripSchema = z.object({
   id: z.string().uuid(),
@@ -46,25 +40,14 @@ const cancelTripCommand: CommandHandler<CancelTripInput, { tripId: string; cance
         return raiseTransportError(409, 'trip_not_cancellable', 'Only scheduled or in-progress trips can be cancelled.')
       }
       const cancelledAt = new Date()
-      let driver: TransportDriver | null = null
-      if (trip.status === 'in_progress') {
-        driver = await transactionEm.findOne(TransportDriver, {
-          id: trip.driverId,
-          ...scope,
-          deletedAt: null,
-        }, { lockMode: LockMode.PESSIMISTIC_WRITE })
-        if (driver?.status === 'on_trip') {
-          driver.status = 'available'
-          driver.updatedAt = cancelledAt
-          await transactionEm.persist(driver)
-        }
-        trip.actualEndTime = cancelledAt
-      }
+      // Cancelling an in-progress trip frees the driver automatically: availability is
+      // derived from the trip board, not stored on the driver.
+      if (trip.status === 'in_progress') trip.actualEndTime = cancelledAt
       trip.status = 'cancelled'
       trip.cancellationReason = input.reason ?? null
       trip.updatedAt = cancelledAt
       await transactionEm.persist(trip).flush()
-      return { trip, driver, cancelledAt }
+      return { trip, cancelledAt }
     })
 
     const dataEngine = ctx.container.resolve('dataEngine') as DataEngine
@@ -77,17 +60,6 @@ const cancelTripCommand: CommandHandler<CancelTripInput, { tripId: string; cance
       events: transportTripEvents,
       indexer: transportTripIndexer,
     })
-    if (result.driver) {
-      await emitCrudSideEffects({
-        dataEngine,
-        action: 'updated',
-        entity: result.driver,
-        identifiers: { id: result.driver.id, ...scope },
-        actorUserId: ctx.auth?.sub ?? null,
-        events: transportDriverEvents,
-        indexer: transportDriverIndexer,
-      })
-    }
     return { tripId: result.trip.id, cancelledAt: result.cancelledAt }
   },
   buildLog: ({ input, ctx }) => {

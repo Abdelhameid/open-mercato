@@ -95,6 +95,11 @@ test.describe('TC-FREIGHT-005: freight payment recording and invoice sync', () =
       expect(Number(recordedBody?.paidTotalAmount)).toBeCloseTo(437.5, 2)
       expect(Number(recordedBody?.outstandingAmount)).toBeCloseTo(1000, 2)
 
+      const paymentRowResponse = await apiRequest(request, 'GET', `${PAYMENTS}?id=${paymentId}&pageSize=1`, { token })
+      const paymentRowBody = await readJsonSafe<{ items?: Array<Record<string, unknown>> }>(paymentRowResponse)
+      const paymentRow = paymentRowBody?.items?.[0]
+      expect(String(paymentRow?.receipt_number ?? '')).toMatch(/^RV-\d{5}$/)
+
       const invoiceAfterRecord = await fetchSalesInvoice(request, token, salesInvoiceId as string)
       expect(readNumericString(invoiceAfterRecord, ['paid_total_amount', 'paidTotalAmount'])).toBeCloseTo(437.5, 2)
       expect(readNumericString(invoiceAfterRecord, ['outstanding_amount', 'outstandingAmount'])).toBeCloseTo(1000, 2)

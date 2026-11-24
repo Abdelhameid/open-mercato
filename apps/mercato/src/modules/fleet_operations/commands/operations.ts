@@ -5,7 +5,7 @@ import { emitCrudSideEffects } from '@open-mercato/shared/lib/commands/helpers'
 import { withAtomicFlush } from '@open-mercato/shared/lib/commands/flush'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { enforceCommandOptimisticLockWithGuards } from '@open-mercato/shared/lib/crud/optimistic-lock-command'
-import type { CrudEventsConfig, CrudIndexerConfig } from '@open-mercato/shared/lib/crud/types'
+import type { CrudEmitContext, CrudEventsConfig, CrudIndexerConfig } from '@open-mercato/shared/lib/crud/types'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import { z } from 'zod'
 import {
@@ -277,7 +277,18 @@ registerCrudCommands({
   },
 })
 
-export const fuelLogEvents = makeEvents<FleetFuelLog>('fuel_log')
+export const fuelLogEvents = {
+  ...makeEvents<FleetFuelLog>('fuel_log'),
+  // The vehicle register is transport-owned; the event carries the reading so
+  // its subscriber can advance the register without a cross-module ORM read.
+  buildPayload: ({ entity, identifiers }: CrudEmitContext<FleetFuelLog>) => ({
+    id: identifiers.id,
+    organizationId: identifiers.organizationId ?? entity.organizationId,
+    tenantId: identifiers.tenantId ?? entity.tenantId,
+    vehicleId: entity.vehicleId,
+    odometer: entity.odometer ?? null,
+  }),
+}
 export const fuelLogIndexer = makeIndexer<FleetFuelLog>('fleet_operations:fleet_fuel_log')
 registerCrudCommands({
   entity: FleetFuelLog,
@@ -499,6 +510,7 @@ const completeWorkOrderCommand: CommandHandler<
       tenantId: order.tenantId,
       organizationId: order.organizationId,
       vehicleId: order.vehicleId,
+      odometer: order.odometer ?? null,
       workOrderNumber: order.workOrderNumber,
       totalCost: order.totalCost,
       currencyCode: order.currencyCode,

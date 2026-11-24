@@ -1,11 +1,9 @@
 import type { CrudEventsConfig, CrudIndexerConfig } from '@open-mercato/shared/lib/crud/types'
-import { TransportDriver, TransportRoute, TransportTripSchedule, TransportVehicle } from '../data/entities'
+import { TransportRoute, TransportTripSchedule, TransportVehicle } from '../data/entities'
 import {
-  createDriverSchema,
   createRouteSchema,
   createTripScheduleSchema,
   createVehicleSchema,
-  updateDriverSchema,
   updateRouteSchema,
   updateTripScheduleSchema,
   updateVehicleSchema,
@@ -59,13 +57,10 @@ function tripAssignment(input: Record<string, unknown>, id?: string) {
 }
 
 export const TRANSPORT_VEHICLE_ENTITY_ID = 'transport_operations:transport_vehicle' as const
-export const TRANSPORT_DRIVER_ENTITY_ID = 'transport_operations:transport_driver' as const
 export const TRANSPORT_ROUTE_ENTITY_ID = 'transport_operations:transport_route' as const
 export const TRANSPORT_TRIP_ENTITY_ID = 'transport_operations:transport_trip_schedule' as const
 export const transportVehicleEvents = makeEvents<TransportVehicle>('vehicle')
 export const transportVehicleIndexer = makeIndexer<TransportVehicle>(TRANSPORT_VEHICLE_ENTITY_ID)
-export const transportDriverEvents = makeEvents<TransportDriver>('driver')
-export const transportDriverIndexer = makeIndexer<TransportDriver>(TRANSPORT_DRIVER_ENTITY_ID)
 export const transportRouteEvents = makeEvents<TransportRoute>('route')
 export const transportRouteIndexer = makeIndexer<TransportRoute>(TRANSPORT_ROUTE_ENTITY_ID)
 export const transportTripEvents = makeEvents<TransportTripSchedule>('trip_schedule')
@@ -99,21 +94,6 @@ registerCrudCommands({
   },
   events: transportVehicleEvents,
   indexer: transportVehicleIndexer,
-})
-
-registerCrudCommands({
-  entity: TransportDriver,
-  entityId: TRANSPORT_DRIVER_ENTITY_ID,
-  resource: 'drivers',
-  createSchema: createDriverSchema,
-  updateSchema: updateDriverSchema,
-  toCreateData: (input) => ({ ...input, licenseExpiry: toDate(input.licenseExpiry) }),
-  toUpdateData: (input) => {
-    const { id: _id, licenseExpiry, ...patch } = input
-    return licenseExpiry === undefined ? patch : { ...patch, licenseExpiry: toDate(licenseExpiry) }
-  },
-  events: transportDriverEvents,
-  indexer: transportDriverIndexer,
 })
 
 registerCrudCommands({

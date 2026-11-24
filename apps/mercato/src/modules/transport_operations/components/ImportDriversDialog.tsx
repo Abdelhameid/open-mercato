@@ -4,7 +4,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { ImportTransportRecordsDialog, type ImportPreviewColumn } from './ImportTransportRecordsDialog'
 import { buildDriverImportTemplateCsv, parseDriverImportRows } from '../lib/driverImport'
 
-const ENTITY_ID = 'transport_operations:transport_driver'
+const ENTITY_ID = 'hr_management:hr_driver_profile'
 
 function textColumn(key: string, label: string): ImportPreviewColumn {
   return { key, label, render: (payload) => String(payload[key] ?? '') }

@@ -47,6 +47,7 @@ export type EmployeeFormValues = {
   email: string
   phone: string
   bankIban: string
+  userId: string
   // Carries the optimistic-lock version into `CrudForm`, which derives the
   // expected-version header from `initialValues.updatedAt` for update AND delete.
   updatedAt?: string | null
@@ -83,6 +84,7 @@ export function toEmployeeFormValues(row: EmployeeRow): EmployeeFormValues {
     email: row.email ?? '',
     phone: row.phone ?? '',
     bankIban: row.bank_iban ?? '',
+    userId: row.user_id ?? '',
     updatedAt: row.updatedAt ?? row.updated_at ?? null,
   }
 }
@@ -106,6 +108,7 @@ export function buildEmployeeFormDefaults(id = ''): EmployeeFormValues {
     email: '',
     phone: '',
     bankIban: '',
+    userId: '',
     updatedAt: null,
   }
 }
@@ -137,6 +140,7 @@ export function toEmployeePayload(values: EmployeeFormValues): Record<string, un
     email: optional(values.email),
     phone: optional(values.phone),
     bankIban: optional(values.bankIban),
+    userId: optional(values.userId),
   }
 }
 
@@ -201,6 +205,15 @@ function useEmployeeFields(
     { id: 'email', label: t('hr_management.employees.form.fields.email', 'Email'), type: 'text' },
     { id: 'phone', label: t('hr_management.employees.form.fields.phone', 'Phone'), type: 'text' },
     { id: 'bankIban', label: t('hr_management.employees.form.fields.bankIban', 'Bank IBAN'), type: 'text' },
+    {
+      id: 'userId',
+      label: t('hr_management.employees.form.fields.userId', 'Staff user id'),
+      type: 'text',
+      help: t(
+        'hr_management.employees.form.fields.userIdHint',
+        'Links this person to a staff login; time tracking and the planner match by this user.',
+      ),
+    },
   ], [t, departmentOptions, managerOptions])
 }
 
@@ -210,7 +223,7 @@ function useEmployeeGroups(t: Translate): CrudFormGroup[] {
     { id: 'identity', title: t('hr_management.employees.form.groups.identity'), column: 2, fields: ['identityType', 'nationalId', 'nationalIdExpiry'] },
     { id: 'employment', title: t('hr_management.employees.form.groups.employment'), column: 1, fields: ['departmentId', 'managerEmployeeId', 'jobTitle', 'employmentType', 'status'] },
     { id: 'dates', title: t('hr_management.employees.form.groups.dates'), column: 2, fields: ['hireDate', 'terminationDate'] },
-    { id: 'contact', title: t('hr_management.employees.form.groups.contact'), column: 1, fields: ['email', 'phone', 'bankIban'] },
+    { id: 'contact', title: t('hr_management.employees.form.groups.contact'), column: 1, fields: ['email', 'phone', 'bankIban', 'userId'] },
   ], [t])
 }
 

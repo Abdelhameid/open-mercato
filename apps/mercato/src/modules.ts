@@ -180,7 +180,13 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'ratelimit_probe', from: '@app' },
   { id: 'saudi_localization', from: '@app' },
   { id: 'transport_operations', from: '@app' },
-  { id: 'hr_management', from: '@app' },
+  {
+    id: 'hr_management',
+    from: '@app',
+    // HR is the people center; keep its group ahead of the other workforce
+    // groups (staff remains the time-tracking/planner surface).
+    overrides: { nav: { groupOrder: ['hr_management.nav.group'] } },
+  },
   { id: 'fleet_management', from: '@app' },
   { id: 'fleet_operations', from: '@app' },
   { id: 'financial', from: '@app' },

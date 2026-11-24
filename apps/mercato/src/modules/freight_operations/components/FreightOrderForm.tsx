@@ -27,6 +27,8 @@ export type OrderFormValues = {
   cargoVolumeM3: string
   cargoQuantity: string
   cargoUnit: string
+  catalogProductId: string
+  packageCount: string
   cargoHazardous: boolean
   cargoRefrigerated: boolean
   temperatureMinC: string
@@ -77,6 +79,8 @@ export function toOrderFormValues(row: FreightOrderRow): OrderFormValues {
     cargoVolumeM3: textOf((row as unknown as Record<string, unknown>).cargo_volume_m3),
     cargoQuantity: textOf((row as unknown as Record<string, unknown>).cargo_quantity),
     cargoUnit: textOf((row as unknown as Record<string, unknown>).cargo_unit),
+    catalogProductId: textOf((row as unknown as Record<string, unknown>).catalog_product_id),
+    packageCount: textOf((row as unknown as Record<string, unknown>).package_count),
     cargoHazardous: Boolean((row as unknown as Record<string, unknown>).cargo_hazardous),
     cargoRefrigerated: Boolean((row as unknown as Record<string, unknown>).cargo_refrigerated),
     temperatureMinC: textOf((row as unknown as Record<string, unknown>).temperature_min_c),
@@ -105,6 +109,8 @@ export function buildOrderFormDefaults(id = ''): OrderFormValues {
     cargoVolumeM3: '',
     cargoQuantity: '',
     cargoUnit: '',
+    catalogProductId: '',
+    packageCount: '',
     cargoHazardous: false,
     cargoRefrigerated: false,
     temperatureMinC: '',
@@ -152,6 +158,8 @@ export function toOrderPayload(
     cargoVolumeM3: optional(values.cargoVolumeM3),
     cargoQuantity: optional(values.cargoQuantity),
     cargoUnit: optional(values.cargoUnit),
+    catalogProductId: optional(values.catalogProductId),
+    packageCount: values.packageCount.trim().length > 0 ? Number.parseInt(values.packageCount.trim(), 10) : null,
     cargoHazardous: values.cargoHazardous,
     cargoRefrigerated: values.cargoRefrigerated,
     temperatureMinC: values.cargoRefrigerated ? optional(values.temperatureMinC) : null,
@@ -214,6 +222,37 @@ function useOrderFields(t: Translate, customerOptions: Array<{ value: string; la
         value,
         label: t(`freight_operations.orders.cargo_unit.${value}`, value),
       })),
+    },
+    {
+      id: 'catalogProductId',
+      label: t('freight_operations.orders.form.fields.catalogProduct', 'Catalog product'),
+      type: 'combobox',
+      layout: 'half',
+      allowCustomValues: false,
+      loadOptions: async (query?: string) => {
+        const params: Record<string, string | number> = { pageSize: 20, sortField: 'title', sortDir: 'asc' }
+        if (query?.trim()) params.search = query.trim()
+        const data = await fetchCrudList<{ id: string; title?: string | null; sku?: string | null }>('catalog/products', params)
+        return (data?.items ?? []).map((product) => ({
+          value: product.id,
+          label: [product.sku, product.title].filter(Boolean).join(' — '),
+        }))
+      },
+      resolveLabel: async (value: string) => {
+        if (!value) return ''
+        const data = await fetchCrudList<{ id: string; title?: string | null; sku?: string | null }>('catalog/products', {
+          ids: value,
+          pageSize: 1,
+        })
+        const product = data?.items?.[0]
+        return product ? [product.sku, product.title].filter(Boolean).join(' — ') : value
+      },
+    },
+    {
+      id: 'packageCount',
+      label: t('freight_operations.orders.form.fields.packageCount', 'Packages'),
+      type: 'number',
+      layout: 'third',
     },
     {
       id: 'cargoHazardous',

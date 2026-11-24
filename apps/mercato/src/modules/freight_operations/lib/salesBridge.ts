@@ -64,6 +64,7 @@ export async function createFreightSalesInvoice(
     kind: 'service' as const,
     name: line.name,
     ...(line.description ? { description: line.description } : {}),
+    ...(line.productId ? { productId: line.productId } : {}),
     currencyCode: input.currencyCode,
     quantity: line.quantity,
     unitPriceNet: line.unitPriceNet,

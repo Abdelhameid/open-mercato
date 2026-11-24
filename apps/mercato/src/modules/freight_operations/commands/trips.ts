@@ -20,6 +20,7 @@ import { raiseFreightError } from '../lib/errors'
 import { readFreightSettings, type FreightScope } from '../lib/freightSettings'
 import { allocateDocumentNumber } from '../lib/documentNumber'
 import { assertFreightAssignmentAvailable } from '../lib/assignment'
+import { findTransportScheduleReference } from '../lib/transportReference'
 import { computeChargeAmount, computeTripPricing } from '../lib/tripPricing'
 import { amountToString } from '../lib/money'
 import { emitFreightEvent } from '../events'
@@ -102,6 +103,28 @@ async function emitTripLifecycle(
     tenantId: scope.tenantId,
     organizationId: scope.organizationId,
   })
+}
+
+async function assertTransportTripLink(
+  em: EntityManager,
+  scope: FreightScope,
+  input: { transportTripId?: unknown; vehicleId?: unknown; driverId?: unknown },
+): Promise<void> {
+  if (!input.transportTripId) return
+  const reference = await findTransportScheduleReference(em, scope, String(input.transportTripId))
+  if (reference.available && !reference.schedule) {
+    return raiseFreightError(409, 'transport_trip_not_found', 'The selected transport trip does not exist.')
+  }
+  if (!reference.schedule) return
+  if (reference.schedule.status === 'completed' || reference.schedule.status === 'cancelled') {
+    return raiseFreightError(409, 'transport_trip_closed', 'The selected transport trip is already closed.')
+  }
+  if (input.vehicleId && reference.schedule.vehicleId && String(input.vehicleId) !== reference.schedule.vehicleId) {
+    return raiseFreightError(409, 'transport_trip_mismatch', 'The selected transport trip uses a different vehicle.')
+  }
+  if (input.driverId && reference.schedule.driverId && String(input.driverId) !== reference.schedule.driverId) {
+    return raiseFreightError(409, 'transport_trip_mismatch', 'The selected transport trip uses a different driver.')
+  }
 }
 
 type TripSnapshotData = {
@@ -246,6 +269,7 @@ const tripCrudConfig: CrudCommandConfig<FreightTrip> = {
     const executionDate = toDate(input.executionDate)
     if (!executionDate) return raiseFreightError(400, 'invalid_execution_date', 'A valid execution date is required.')
     const quantity = (input.quantity as string | undefined) ?? '1'
+    await assertTransportTripLink(em, scope, input)
 
     const isSpot = input.source === 'spot'
     const snapshot = isSpot
@@ -316,6 +340,11 @@ const tripCrudConfig: CrudCommandConfig<FreightTrip> = {
     const trip = current as FreightTrip
     const scope = resolveScope(ctx)
     const em = entityManager(ctx)
+    await assertTransportTripLink(em, scope, {
+      transportTripId: input.transportTripId ?? trip.transportTripId,
+      vehicleId: input.vehicleId ?? trip.vehicleId,
+      driverId: input.driverId ?? trip.driverId,
+    })
     const quantity = input.quantity === undefined ? trip.quantity : String(input.quantity)
     // Existing charges stay attached to the trip, so the recomputation has to
     // include them — dropping them here would silently un-bill a trip's extras.

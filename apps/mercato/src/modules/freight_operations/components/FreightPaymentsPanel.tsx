@@ -144,20 +144,23 @@ export function FreightPaymentsPanel({
                     </Badge>
                   </td>
                   <td className="py-2">
-                    {payment.status === 'recorded' ? (
-                      <RowActions
-                        items={[
-                          {
-                            id: 'void',
-                            label: t('freight_operations.payments.void.action', 'Void'),
-                            destructive: true,
-                            onSelect: () => setVoidTarget(payment),
-                          },
-                        ]}
-                      />
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
+                    <RowActions
+                      items={[
+                        {
+                          id: 'receipt',
+                          label: t('freight_operations.payments.receipt.action', 'Receipt'),
+                          href: `/backend/freight/payments/${payment.id}/receipt`,
+                        },
+                        ...(payment.status === 'recorded'
+                          ? [{
+                              id: 'void',
+                              label: t('freight_operations.payments.void.action', 'Void'),
+                              destructive: true,
+                              onSelect: () => setVoidTarget(payment),
+                            }]
+                          : []),
+                      ]}
+                    />
                   </td>
                 </tr>
               ))}

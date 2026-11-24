@@ -37,6 +37,8 @@ type FreightSettingsResponse = {
   tripNumberPrefix: string
   abstractNumberPrefix: string
   deliveryNoteNumberPrefix: string
+  adjustmentNoteNumberPrefix: string
+  receiptNumberPrefix: string
   updatedAt: string | null
 }
 
@@ -53,6 +55,8 @@ type FormState = {
   tripNumberPrefix: string
   abstractNumberPrefix: string
   deliveryNoteNumberPrefix: string
+  adjustmentNoteNumberPrefix: string
+  receiptNumberPrefix: string
 }
 
 const EMPTY_FORM: FormState = {
@@ -68,6 +72,8 @@ const EMPTY_FORM: FormState = {
   tripNumberPrefix: 'FT',
   abstractNumberPrefix: 'FA',
   deliveryNoteNumberPrefix: 'DN',
+  adjustmentNoteNumberPrefix: 'AN',
+  receiptNumberPrefix: 'RV',
 }
 
 function toFormState(response: FreightSettingsResponse): FormState {
@@ -84,6 +90,8 @@ function toFormState(response: FreightSettingsResponse): FormState {
     tripNumberPrefix: response.tripNumberPrefix,
     abstractNumberPrefix: response.abstractNumberPrefix,
     deliveryNoteNumberPrefix: response.deliveryNoteNumberPrefix,
+    adjustmentNoteNumberPrefix: response.adjustmentNoteNumberPrefix,
+    receiptNumberPrefix: response.receiptNumberPrefix,
   }
 }
 
@@ -139,6 +147,8 @@ export default function FreightSettingsForm() {
         tripNumberPrefix: form.tripNumberPrefix.trim() || 'FT',
         abstractNumberPrefix: form.abstractNumberPrefix.trim() || 'FA',
         deliveryNoteNumberPrefix: form.deliveryNoteNumberPrefix.trim() || 'DN',
+        adjustmentNoteNumberPrefix: form.adjustmentNoteNumberPrefix.trim() || 'AN',
+        receiptNumberPrefix: form.receiptNumberPrefix.trim() || 'RV',
       }
       await runMutation<Awaited<ReturnType<typeof apiCallOrThrow>>>({
         operation: () => withScopedApiRequestHeaders(
@@ -263,6 +273,8 @@ export default function FreightSettingsForm() {
                 ['tripNumberPrefix', 'freight_operations.settings.fields.tripNumberPrefix', 'Trip prefix'],
                 ['abstractNumberPrefix', 'freight_operations.settings.fields.abstractNumberPrefix', 'Abstract prefix'],
                 ['deliveryNoteNumberPrefix', 'freight_operations.settings.fields.deliveryNoteNumberPrefix', 'Delivery note prefix'],
+                ['adjustmentNoteNumberPrefix', 'freight_operations.settings.fields.adjustmentNoteNumberPrefix', 'Adjustment note prefix'],
+                ['receiptNumberPrefix', 'freight_operations.settings.fields.receiptNumberPrefix', 'Receipt voucher prefix'],
               ] as const).map(([key, labelKey, fallback]) => (
                 <div key={key} className="flex flex-col gap-2">
                   <Label htmlFor={`freight-prefix-${key}`}>{t(labelKey, fallback)}</Label>

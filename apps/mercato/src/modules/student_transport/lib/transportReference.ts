@@ -82,9 +82,18 @@ export async function listTransportDrivers(
 ): Promise<TransportDriverReference[] | null> {
   const rows = await tolerantRows<Record<string, unknown>>(
     em,
-    `select id, full_name, phone, status, license_number, license_expiry from transport_drivers
-     where tenant_id = ? and organization_id = ? and deleted_at is null
-     order by full_name asc limit ${MAX_REFERENCE_ROWS}`,
+    `select p.id, trim(e.first_name || ' ' || e.last_name) as full_name, e.phone,
+            case
+              when e.status in ('suspended', 'terminated') then 'suspended'
+              when e.status = 'on_leave' then 'on_leave'
+              else 'available'
+            end as status,
+            p.license_number, p.license_expiry
+       from hr_driver_profiles p
+       join hr_employees e on e.id = p.employee_id
+      where p.tenant_id = ? and p.organization_id = ?
+        and p.deleted_at is null and e.deleted_at is null
+      order by e.first_name asc, e.last_name asc limit ${MAX_REFERENCE_ROWS}`,
     [scope.tenantId, scope.organizationId],
   )
   if (rows === null) return null
@@ -131,8 +140,17 @@ export async function findTransportDriver(
 ): Promise<{ available: boolean; driver: TransportDriverReference | null }> {
   const rows = await tolerantRows<Record<string, unknown>>(
     em,
-    `select id, full_name, phone, status, license_number, license_expiry from transport_drivers
-     where tenant_id = ? and organization_id = ? and id = ? and deleted_at is null limit 1`,
+    `select p.id, trim(e.first_name || ' ' || e.last_name) as full_name, e.phone,
+            case
+              when e.status in ('suspended', 'terminated') then 'suspended'
+              when e.status = 'on_leave' then 'on_leave'
+              else 'available'
+            end as status,
+            p.license_number, p.license_expiry
+       from hr_driver_profiles p
+       join hr_employees e on e.id = p.employee_id
+      where p.tenant_id = ? and p.organization_id = ? and p.id = ?
+        and p.deleted_at is null and e.deleted_at is null limit 1`,
     [scope.tenantId, scope.organizationId, id],
   )
   if (rows === null) return { available: false, driver: null }

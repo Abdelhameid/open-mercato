@@ -21,6 +21,7 @@ import { readFreightSettings, type FreightScope } from '../lib/freightSettings'
 import { allocateDocumentNumber } from '../lib/documentNumber'
 import { assertFreightAssignmentAvailable } from '../lib/assignment'
 import { findTransportScheduleReference } from '../lib/transportReference'
+import { recordDeliveryChecklist } from '../lib/checklist'
 import { computeChargeAmount, computeTripPricing } from '../lib/tripPricing'
 import { amountToString } from '../lib/money'
 import { emitFreightEvent } from '../events'
@@ -369,7 +370,7 @@ const tripCrudConfig: CrudCommandConfig<FreightTrip> = {
       })),
     )
     return compact({
-      executionDate: toDate(input.executionDate),
+      executionDate: input.executionDate === undefined ? undefined : toDate(input.executionDate),
       quantity,
       vehicleId: input.vehicleId,
       driverId: input.driverId,
@@ -524,7 +525,7 @@ const TRIP_TRANSITIONS: TripTransition[] = [
     guard: async (ctx, _em, scope, trip) => {
       const settings = await loadSettings(ctx, scope)
       if (!settings.requirePodForBilling) return
-      if (!trip.podDocumentId && !trip.podReference) {
+      if (!trip.podDocumentId && !trip.podReference && !trip.podSignatureDocumentId) {
         return raiseFreightError(409, 'pod_required', 'A proof of delivery is required before delivery can be recorded.')
       }
     },
@@ -551,17 +552,33 @@ for (const transition of TRIP_TRANSITIONS) {
       const parsed = transition.action === 'deliver' ? tripDeliverSchema.parse(rawInput) : tripActionSchema.parse(rawInput)
       const scope = resolveScope(ctx)
       const em = entityManager(ctx)
-      const trip = await em.transactional(async (tx) => {
+      const result = await em.transactional(async (tx) => {
         const locked = await findTripForUpdate(ctx, tx, scope, parsed.id)
         if (!transition.from.includes(locked.executionStatus)) {
           return raiseFreightError(409, 'trip_status_invalid', 'The trip is not in a state that allows this action.')
         }
+        let checklistRun: Awaited<ReturnType<typeof recordDeliveryChecklist>> = null
         if (transition.action === 'deliver') {
           const deliverInput = parsed as ReturnType<typeof tripDeliverSchema.parse>
           locked.podDocumentId = deliverInput.podDocumentId ?? locked.podDocumentId ?? null
+          locked.podSignatureDocumentId = deliverInput.podSignatureDocumentId ?? locked.podSignatureDocumentId ?? null
           locked.podReference = deliverInput.podReference ?? locked.podReference ?? null
           locked.podReceivedByName = deliverInput.podReceivedByName ?? locked.podReceivedByName ?? null
           locked.podReceivedAt = (deliverInput.podReceivedAt ? new Date(String(deliverInput.podReceivedAt)) : null) ?? locked.podReceivedAt ?? new Date()
+          checklistRun = await recordDeliveryChecklist(
+            ctx,
+            tx,
+            scope,
+            { freightTripId: locked.id },
+            { entityId: FREIGHT_TRIP_ENTITY_ID, recordId: locked.id },
+            deliverInput.checklist ?? null,
+            {
+              enforce: deliverInput.enforceChecklist === true,
+              driverId: locked.driverId ?? null,
+              actorUserId: ctx.auth?.sub ?? null,
+              extraAttachmentIds: [deliverInput.podDocumentId, deliverInput.podSignatureDocumentId],
+            },
+          )
         }
         if (transition.guard) {
           await transition.guard(ctx, tx, scope, locked)
@@ -570,11 +587,22 @@ for (const transition of TRIP_TRANSITIONS) {
         transition.apply(locked, now)
         locked.updatedAt = now
         await tx.persist(locked).flush()
-        return locked
+        return { trip: locked, checklistRun }
       })
-      await emitTripUpdate(ctx, trip, scope)
-      await emitTripLifecycle(transition.event, trip, scope)
-      return { tripId: trip.id }
+      await emitTripUpdate(ctx, result.trip, scope)
+      await emitTripLifecycle(transition.event, result.trip, scope)
+      if (result.checklistRun) {
+        await emitFreightEvent('freight_operations.checklist_run.completed', {
+          id: result.checklistRun.id,
+          orderId: null,
+          tripId: result.trip.id,
+          templateId: result.checklistRun.templateId ?? null,
+          completedAt: result.checklistRun.completedAt?.toISOString() ?? new Date().toISOString(),
+          tenantId: scope.tenantId,
+          organizationId: scope.organizationId,
+        })
+      }
+      return { tripId: result.trip.id }
     },
     buildLog: ({ input, ctx }) => {
       const scope = resolveScope(ctx)

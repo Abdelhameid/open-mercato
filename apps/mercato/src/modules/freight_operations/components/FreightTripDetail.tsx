@@ -32,6 +32,8 @@ import { TripChargesSection } from './TripChargesSection'
 import { TripChargesDialog } from './TripChargesDialog'
 import { TripDeliverDialog } from './TripDeliverDialog'
 import { DeliveryNotesSection } from './DeliveryNotesSection'
+import { ChecklistRunsSection } from './ChecklistRunsSection'
+import { buildAttachmentFileUrl } from '@open-mercato/core/modules/attachments/lib/imageUrls'
 
 const ENTITY_ID = 'freight_operations:freight_trip'
 const DETAIL_MUTATION_CONTEXT_ID = 'freight_operations.trips.detail'
@@ -258,6 +260,32 @@ export default function FreightTripDetail({ id }: { id: string }) {
             <DetailSection title={t('freight_operations.trips.detail.pod', 'Proof of delivery')}>
               <FieldRow label={t('freight_operations.trips.deliver.podReference', 'POD reference')} value={trip.pod_reference ?? '—'} />
               <FieldRow
+                label={t('freight_operations.trips.detail.podDocument', 'POD document')}
+                value={raw.pod_document_id ? (
+                  <a
+                    className="underline-offset-4 hover:underline"
+                    href={buildAttachmentFileUrl(String(raw.pod_document_id))}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {t('freight_operations.trips.detail.viewPodDocument', 'View document')}
+                  </a>
+                ) : '—'}
+              />
+              <FieldRow
+                label={t('freight_operations.trips.detail.podSignature', 'Signature')}
+                value={raw.pod_signature_document_id ? (
+                  <a
+                    className="underline-offset-4 hover:underline"
+                    href={buildAttachmentFileUrl(String(raw.pod_signature_document_id))}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {t('freight_operations.trips.detail.viewPodSignature', 'View signature')}
+                  </a>
+                ) : '—'}
+              />
+              <FieldRow
                 label={t('freight_operations.trips.deliver.receivedBy', 'Received by')}
                 value={raw.pod_received_by_name ? String(raw.pod_received_by_name) : '—'}
               />
@@ -266,6 +294,8 @@ export default function FreightTripDetail({ id }: { id: string }) {
                 value={formatFreightDate(raw.pod_received_at as string | null)}
               />
             </DetailSection>
+
+            <ChecklistRunsSection tripId={trip.id} />
           </div>
 
           {trip.execution_status !== 'cancelled' ? (

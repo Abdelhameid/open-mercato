@@ -1,5 +1,7 @@
 # Fleet / HR: remaining phases, and how to execute them
 
+> **Historical — completed.** Current project status lives in [`PROJECT-PLAN.md`](./PROJECT-PLAN.md).
+
 Companion to [`2026-09-26-app-modules-completion.md`](./2026-09-26-app-modules-completion.md).
 That plan describes the module-completion programme; this file is the operational
 handoff for what is left after the 2026-09-26 sessions, written so the next agent

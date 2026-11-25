@@ -30,6 +30,7 @@ import { allocateDocumentNumber } from '../lib/documentNumber'
 import { createTrackingToken } from '../lib/trackingToken'
 import { assertFreightAssignmentAvailable } from '../lib/assignment'
 import { findTransportScheduleReference } from '../lib/transportReference'
+import { recordDeliveryChecklist } from '../lib/checklist'
 import { buildInvoiceDraft } from '../lib/invoiceDraft'
 import { toAmountNumber } from '../lib/money'
 import {
@@ -223,8 +224,8 @@ const orderCrudConfig: CrudCommandConfig<FreightOrder> = {
       dropoffLocation: input.dropoffLocation === undefined ? undefined : String(input.dropoffLocation),
       pickupAddressSnapshot: input.pickupAddressSnapshot,
       dropoffAddressSnapshot: input.dropoffAddressSnapshot,
-      requestedPickupAt: toDate(input.requestedPickupAt),
-      requestedDeliveryAt: toDate(input.requestedDeliveryAt),
+      requestedPickupAt: input.requestedPickupAt === undefined ? undefined : toDate(input.requestedPickupAt),
+      requestedDeliveryAt: input.requestedDeliveryAt === undefined ? undefined : toDate(input.requestedDeliveryAt),
       truckTypeRequired: input.truckTypeRequired,
       agreedAmountNet: input.agreedAmountNet === undefined ? undefined : String(input.agreedAmountNet),
       adjustmentAmountNet: optionalString(input.adjustmentAmountNet),
@@ -532,30 +533,57 @@ const deliverOrderCommand: CommandHandler<DeliverOrderInput, { orderId: string }
     const scope = resolveScope(ctx)
     const settings = await loadSettings(ctx, scope)
     const em = entityManager(ctx)
-    const order = await em.transactional(async (tx) => {
+    const result = await em.transactional(async (tx) => {
       const locked = await findOrderForUpdate(ctx, tx, scope, input.id)
       if (locked.status !== 'in_transit' && locked.status !== 'delivered') {
         return raiseFreightError(409, 'order_not_in_transit', 'Only orders in transit can be delivered.')
       }
-      const podDocumentId = input.podDocumentId ?? null
-      const podReference = input.podReference ?? null
-      if (settings.requirePodForBilling && !podDocumentId && !podReference) {
+      const podDocumentId = input.podDocumentId ?? locked.podDocumentId ?? null
+      const podSignatureDocumentId = input.podSignatureDocumentId ?? locked.podSignatureDocumentId ?? null
+      const podReference = input.podReference ?? locked.podReference ?? null
+      if (settings.requirePodForBilling && !podDocumentId && !podReference && !podSignatureDocumentId) {
         return raiseFreightError(409, 'pod_required', 'A proof of delivery is required before delivery can be recorded.')
       }
+      const checklistRun = await recordDeliveryChecklist(
+        ctx,
+        tx,
+        scope,
+        { freightOrderId: locked.id },
+        { entityId: FREIGHT_ORDER_ENTITY_ID, recordId: locked.id },
+        input.checklist ?? null,
+        {
+          enforce: input.enforceChecklist === true,
+          driverId: locked.driverId ?? null,
+          actorUserId: ctx.auth?.sub ?? null,
+          extraAttachmentIds: [input.podDocumentId, input.podSignatureDocumentId],
+        },
+      )
       const deliveredAt = locked.deliveredAt ?? new Date()
       if (locked.status === 'in_transit') locked.status = 'delivered'
       locked.deliveredAt = deliveredAt
-      locked.podDocumentId = podDocumentId ?? locked.podDocumentId ?? null
-      locked.podReference = podReference ?? locked.podReference ?? null
+      locked.podDocumentId = podDocumentId
+      locked.podSignatureDocumentId = podSignatureDocumentId
+      locked.podReference = podReference
       locked.podReceivedByName = input.podReceivedByName ?? locked.podReceivedByName ?? null
       locked.podReceivedAt = toDate(input.podReceivedAt) ?? locked.podReceivedAt ?? deliveredAt
       locked.updatedAt = deliveredAt
       await tx.persist(locked).flush()
-      return locked
+      return { order: locked, checklistRun }
     })
-    await emitOrderUpdate(ctx, order, scope, ctx.auth?.sub ?? null)
-    await emitOrderLifecycle('freight_operations.order.delivered', order, scope)
-    return { orderId: order.id }
+    await emitOrderUpdate(ctx, result.order, scope, ctx.auth?.sub ?? null)
+    await emitOrderLifecycle('freight_operations.order.delivered', result.order, scope)
+    if (result.checklistRun) {
+      await emitFreightEvent('freight_operations.checklist_run.completed', {
+        id: result.checklistRun.id,
+        orderId: result.order.id,
+        tripId: null,
+        templateId: result.checklistRun.templateId ?? null,
+        completedAt: result.checklistRun.completedAt?.toISOString() ?? new Date().toISOString(),
+        tenantId: scope.tenantId,
+        organizationId: scope.organizationId,
+      })
+    }
+    return { orderId: result.order.id }
   },
   buildLog: ({ input, ctx }) => {
     const scope = resolveScope(ctx)
@@ -580,7 +608,7 @@ const completeOrderCommand: CommandHandler<{ id: string }, { orderId: string }> 
       if (locked.status !== 'delivered') {
         return raiseFreightError(409, 'order_not_delivered', 'Only delivered orders can be completed.')
       }
-      if (!locked.podDocumentId && !locked.podReference) {
+      if (!locked.podDocumentId && !locked.podReference && !locked.podSignatureDocumentId) {
         return raiseFreightError(409, 'pod_required', 'A proof of delivery is required before the order can be completed.')
       }
       locked.status = 'completed'

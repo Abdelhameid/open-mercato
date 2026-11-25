@@ -64,6 +64,23 @@ export type DeliveryNoteStatus = (typeof DELIVERY_NOTE_STATUSES)[number]
 export const EXTERNAL_WAYBILL_STATUSES = ['not_recorded', 'recorded', 'cancelled'] as const
 export type ExternalWaybillStatus = (typeof EXTERNAL_WAYBILL_STATUSES)[number]
 
+export const CHECKLIST_RUN_STATUSES = ['pending', 'completed'] as const
+export type ChecklistRunStatus = (typeof CHECKLIST_RUN_STATUSES)[number]
+
+export type ChecklistTemplateItem = {
+  key: string
+  label: string
+  description?: string | null
+  required: boolean
+  requiresAttachment: boolean
+}
+
+export type ChecklistRunItem = ChecklistTemplateItem & {
+  checked: boolean
+  attachmentId?: string | null
+  notes?: string | null
+}
+
 export const DOCUMENT_SEQUENCE_KINDS = ['order', 'contract', 'trip', 'abstract', 'delivery_note', 'adjustment_note', 'receipt_voucher'] as const
 export type DocumentSequenceKind = (typeof DOCUMENT_SEQUENCE_KINDS)[number]
 
@@ -202,6 +219,9 @@ export class FreightOrder {
 
   @Property({ name: 'pod_document_id', type: 'uuid', nullable: true })
   podDocumentId?: string | null
+
+  @Property({ name: 'pod_signature_document_id', type: 'uuid', nullable: true })
+  podSignatureDocumentId?: string | null
 
   @Property({ name: 'pod_reference', type: 'text', nullable: true })
   podReference?: string | null
@@ -574,6 +594,9 @@ export class FreightTrip {
 
   @Property({ name: 'pod_document_id', type: 'uuid', nullable: true })
   podDocumentId?: string | null
+
+  @Property({ name: 'pod_signature_document_id', type: 'uuid', nullable: true })
+  podSignatureDocumentId?: string | null
 
   @Property({ name: 'pod_reference', type: 'text', nullable: true })
   podReference?: string | null
@@ -1467,6 +1490,119 @@ export class FreightDocumentSequence {
   deletedAt?: Date | null
 }
 
+@Entity({ tableName: 'freight_checklist_templates' })
+@Index({ name: 'freight_checklist_templates_scope_idx', properties: ['tenantId', 'organizationId'] })
+@Index({
+  name: 'freight_checklist_templates_name_unique_idx',
+  expression:
+    'create unique index "freight_checklist_templates_name_unique_idx" on "freight_checklist_templates" ("organization_id", "tenant_id", "name") where deleted_at is null',
+})
+export class FreightChecklistTemplate {
+  [OptionalProps]?: 'items' | 'isActive' | 'isDefault' | 'createdAt' | 'updatedAt' | 'deletedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ type: 'text' })
+  name!: string
+
+  @Property({ type: 'text', nullable: true })
+  description?: string | null
+
+  @Property({ type: 'jsonb', default: [], nullable: false })
+  items: ChecklistTemplateItem[] = []
+
+  @Property({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean = true
+
+  @Property({ name: 'is_default', type: 'boolean', default: false })
+  isDefault: boolean = false
+
+  @Property({ name: 'created_by', type: 'uuid', nullable: true })
+  createdBy?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date(), nullable: true })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}
+
+@Entity({ tableName: 'freight_checklist_runs' })
+@Index({ name: 'freight_checklist_runs_scope_idx', properties: ['tenantId', 'organizationId'] })
+@Index({ name: 'freight_checklist_runs_order_idx', properties: ['organizationId', 'freightOrderId'] })
+@Index({ name: 'freight_checklist_runs_trip_idx', properties: ['organizationId', 'freightTripId'] })
+@Index({
+  name: 'freight_checklist_runs_order_unique_idx',
+  expression:
+    'create unique index "freight_checklist_runs_order_unique_idx" on "freight_checklist_runs" ("organization_id", "tenant_id", "freight_order_id") where freight_order_id is not null and deleted_at is null',
+})
+@Index({
+  name: 'freight_checklist_runs_trip_unique_idx',
+  expression:
+    'create unique index "freight_checklist_runs_trip_unique_idx" on "freight_checklist_runs" ("organization_id", "tenant_id", "freight_trip_id") where freight_trip_id is not null and deleted_at is null',
+})
+export class FreightChecklistRun {
+  [OptionalProps]?: 'status' | 'createdAt' | 'updatedAt' | 'deletedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'freight_order_id', type: 'uuid', nullable: true })
+  freightOrderId?: string | null
+
+  @Property({ name: 'freight_trip_id', type: 'uuid', nullable: true })
+  freightTripId?: string | null
+
+  @Property({ name: 'template_id', type: 'uuid', nullable: true })
+  templateId?: string | null
+
+  @Property({ name: 'template_name_snapshot', type: 'text' })
+  templateNameSnapshot!: string
+
+  @Property({ name: 'template_snapshot', type: 'jsonb', defaultRaw: "'{}'::jsonb", nullable: false })
+  templateSnapshot: Record<string, unknown> = {}
+
+  @Property({ type: 'jsonb', default: [], nullable: false })
+  items: ChecklistRunItem[] = []
+
+  @Enum({ items: [...CHECKLIST_RUN_STATUSES], type: 'text', name: 'status', default: 'completed' })
+  status: ChecklistRunStatus = 'completed'
+
+  @Property({ name: 'completed_at', type: Date, nullable: true })
+  completedAt?: Date | null
+
+  @Property({ name: 'driver_id', type: 'uuid', nullable: true })
+  driverId?: string | null
+
+  @Property({ name: 'created_by', type: 'uuid', nullable: true })
+  createdBy?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date(), nullable: true })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}
+
 export const FREIGHT_ENTITIES = [
   FreightOrder,
   FreightContract,
@@ -1482,4 +1618,6 @@ export const FREIGHT_ENTITIES = [
   FreightDriverRating,
   FreightAdjustmentNote,
   FreightDocumentSequence,
+  FreightChecklistTemplate,
+  FreightChecklistRun,
 ] as const

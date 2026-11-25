@@ -10,6 +10,7 @@ import { createLogger } from '@open-mercato/shared/lib/logger'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { FreightDriverRestBreak, FreightOrder, FreightTrip } from '../../../data/entities'
 import { resolveDriverForUser } from '../../../lib/driverIdentity'
+import { buildChecklistWorkPayload, resolveDefaultChecklistTemplate } from '../../../lib/checklist'
 
 const logger = createLogger('freight_operations')
 
@@ -41,7 +42,7 @@ export async function GET(req: Request) {
       )
     }
 
-    const [orders, trips, openBreak] = await Promise.all([
+    const [orders, trips, openBreak, checklistTemplate] = await Promise.all([
       findWithDecryption(
         em,
         FreightOrder,
@@ -72,10 +73,12 @@ export async function GET(req: Request) {
         endedAt: null,
         deletedAt: null,
       }),
+      resolveDefaultChecklistTemplate(em, scope),
     ])
 
     return NextResponse.json({
       driver,
+      checklist: checklistTemplate ? buildChecklistWorkPayload(checklistTemplate) : null,
       orders: orders.map((order) => ({
         id: order.id,
         orderNumber: order.orderNumber,
@@ -132,6 +135,17 @@ export const openApi: OpenApiRouteDoc = {
               phone: z.string(),
               status: z.string(),
             }),
+            checklist: z.object({
+              templateId: z.string().uuid(),
+              name: z.string(),
+              items: z.array(z.object({
+                key: z.string(),
+                label: z.string(),
+                description: z.string().nullable().optional(),
+                required: z.boolean(),
+                requiresAttachment: z.boolean(),
+              })),
+            }).nullable().optional(),
             orders: z.array(z.object({
               id: z.string().uuid(),
               orderNumber: z.string(),

@@ -48,6 +48,17 @@ export async function POST(req: Request) {
 
     const raw = await readJsonSafe(req, {})
     const input = driverActionSchema.parse(raw ?? {})
+    if (
+      (input.type === 'order_deliver' || input.type === 'trip_deliver')
+      && !input.podReference
+      && !input.podDocumentId
+      && !input.podSignatureDocumentId
+    ) {
+      return NextResponse.json(
+        { error: 'A proof of delivery reference, document or signature is required' },
+        { status: 400 },
+      )
+    }
 
     let resourceKind: string = REST_BREAK_RESOURCE
     let resourceId = driver.id
@@ -122,8 +133,12 @@ export async function POST(req: Request) {
         commandId = 'freight_operations.orders.deliver'
         commandInput = {
           id: input.orderId,
-          podReference: input.podReference,
+          podReference: input.podReference ?? null,
+          podDocumentId: input.podDocumentId ?? null,
+          podSignatureDocumentId: input.podSignatureDocumentId ?? null,
+          enforceChecklist: true,
           ...(input.podReceivedByName ? { podReceivedByName: input.podReceivedByName } : {}),
+          ...(input.checklist ? { checklist: input.checklist } : {}),
         }
         break
       case 'trip_start':
@@ -134,8 +149,12 @@ export async function POST(req: Request) {
         commandId = 'freight_operations.trips.deliver'
         commandInput = {
           id: input.tripId,
-          podReference: input.podReference,
+          podReference: input.podReference ?? null,
+          podDocumentId: input.podDocumentId ?? null,
+          podSignatureDocumentId: input.podSignatureDocumentId ?? null,
+          enforceChecklist: true,
           ...(input.podReceivedByName ? { podReceivedByName: input.podReceivedByName } : {}),
+          ...(input.checklist ? { checklist: input.checklist } : {}),
         }
         break
       case 'rest_start':

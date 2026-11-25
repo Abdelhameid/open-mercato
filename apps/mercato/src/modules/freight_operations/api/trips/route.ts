@@ -57,8 +57,8 @@ const crud = makeCrudRoute({
       'minimum_charge_applied', 'base_amount_net', 'charges_total_net', 'total_net_amount', 'tax_rate',
       'tax_amount', 'total_gross_amount', 'currency_code', 'vehicle_id', 'driver_id', 'transport_trip_id',
       'execution_status', 'billing_status', 'active_abstract_id', 'actual_start_at', 'actual_end_at',
-      'waiting_minutes', 'distance_km', 'pod_reference', 'pod_document_id', 'pod_received_by_name',
-      'pod_received_at', 'notes', 'created_at', 'updated_at',
+      'waiting_minutes', 'distance_km', 'pod_reference', 'pod_document_id', 'pod_signature_document_id',
+      'pod_received_by_name', 'pod_received_at', 'notes', 'created_at', 'updated_at',
     ],
     sortFieldMap: {
       tripNumber: 'trip_number',
@@ -159,6 +159,7 @@ const tripListItemSchema = z.object({
   active_abstract_id: z.string().uuid().nullable().optional(),
   pod_reference: z.string().nullable().optional(),
   pod_document_id: z.string().uuid().nullable().optional(),
+  pod_signature_document_id: z.string().uuid().nullable().optional(),
   pod_received_by_name: z.string().nullable().optional(),
   pod_received_at: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),

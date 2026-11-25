@@ -1,6 +1,6 @@
 # Driver workspace PWA (Phase 3)
 
-**Status:** Implemented (2026-11-22) — core workflow; checklist and automated notifications remain
+**Status:** Implemented (2026-11-22) — core workflow; checklist and POD capture added 2026-11-25 ([spec](./2026-11-25-driver-checklist-and-pod-capture.md)); automated notifications remain
 **Module:** `freight_operations` + `transport_operations`
 **Related:** [`2026-11-21-leandispatcher-feature-parity.md`](../plans/2026-11-21-leandispatcher-feature-parity.md)
 
@@ -120,7 +120,7 @@ sends the record's `updatedAt` as the expected-version header.
 | A staff user with the feature but no driver link | Medium | API answers 403 with a clear message; the page shows it | Admin must link the record |
 | Geolocation is denied or slow | Low | 5s timeout; SOS still sends without coordinates | Dispatcher sees no location for that alert |
 | Rest breaks are not tied to a trip | Low | `trip_id` is optional; the PWA picks the active trip when available | A break can be recorded between trips |
-| No checklist templates yet | Medium | The work list and delivery flow are usable without them; checklist is a follow-up | LeanDispatcher checklist parity is incomplete |
+| A default checklist template blocks every driver delivery | Medium | Deactivate or clear the default flag to suspend enforcement; staff deliveries are unaffected | A misconfigured template can stop the driver workflow until corrected |
 | PWA installability without offline caching | Low | Manifest + activate-only SW; not an offline app | Drivers need connectivity |
 
 ## Final Compliance Report
@@ -139,3 +139,8 @@ sends the record's `updatedAt` as the expected-version header.
   templates and push/notification wiring remain.
 - **2026-11-22 (validation)** — `TC-FREIGHT-013` passes against the local dev server;
   `yarn typecheck`, `yarn lint`, `yarn i18n:check-sync` and `yarn build:app` are green.
+- **2026-11-25** — Driver checklist templates and POD capture shipped: the work payload
+  returns the active default checklist, the deliver dialog renders checklist items with
+  per-item attachments, a POD photo/document and a canvas signature, and the deliver
+  command records a snapshotted checklist run. See
+  [`2026-11-25-driver-checklist-and-pod-capture.md`](./2026-11-25-driver-checklist-and-pod-capture.md).

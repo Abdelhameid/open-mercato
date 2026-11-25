@@ -26,6 +26,8 @@ import {
 import { LIST_HREF } from './orderListMeta'
 import { FreightPaymentsPanel } from './FreightPaymentsPanel'
 import { DeliveryNotesSection } from './DeliveryNotesSection'
+import { ChecklistRunsSection } from './ChecklistRunsSection'
+import { buildAttachmentFileUrl } from '@open-mercato/core/modules/attachments/lib/imageUrls'
 import type { FreightOrderRow, FreightOrderStatus } from './FreightOrdersTable'
 
 const RESOURCE = 'freight_operations/orders'
@@ -176,6 +178,8 @@ export default function FreightOrderDetail({ id }: { id: string }) {
   const vehicleSnapshot = (order as unknown as Record<string, unknown>).vehicle_snapshot as Record<string, unknown> | null | undefined
   const driverSnapshot = (order as unknown as Record<string, unknown>).driver_snapshot as Record<string, unknown> | null | undefined
   const podReferenceStored = (order as unknown as Record<string, unknown>).pod_reference as string | null | undefined
+  const podDocumentId = (order as unknown as Record<string, unknown>).pod_document_id as string | null | undefined
+  const podSignatureDocumentId = (order as unknown as Record<string, unknown>).pod_signature_document_id as string | null | undefined
   const salesInvoiceId = (order as unknown as Record<string, unknown>).sales_invoice_id as string | null | undefined
 
   return (
@@ -323,6 +327,32 @@ export default function FreightOrderDetail({ id }: { id: string }) {
                 {(status === 'delivered' || status === 'in_transit') && (
                   <>
                     <FieldRow label={t('freight_operations.orders.detail.pod', 'Proof of delivery')} value={podReferenceStored || t('freight_operations.orders.detail.podMissing', 'Not recorded')} />
+                    <FieldRow
+                      label={t('freight_operations.orders.detail.podDocument', 'POD document')}
+                      value={podDocumentId ? (
+                        <a
+                          className="underline-offset-4 hover:underline"
+                          href={buildAttachmentFileUrl(podDocumentId)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {t('freight_operations.orders.detail.viewPodDocument', 'View document')}
+                        </a>
+                      ) : '—'}
+                    />
+                    <FieldRow
+                      label={t('freight_operations.orders.detail.podSignature', 'Signature')}
+                      value={podSignatureDocumentId ? (
+                        <a
+                          className="underline-offset-4 hover:underline"
+                          href={buildAttachmentFileUrl(podSignatureDocumentId)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {t('freight_operations.orders.detail.viewPodSignature', 'View signature')}
+                        </a>
+                      ) : '—'}
+                    />
                     <FieldRow label={t('freight_operations.orders.detail.podReceivedBy', 'Received by')} value={order.pod_received_by_name || '—'} />
                     <FieldRow label={t('freight_operations.orders.detail.podReceivedAt', 'Received at')} value={formatFreightDate(order.pod_received_at)} />
                   </>
@@ -380,6 +410,8 @@ export default function FreightOrderDetail({ id }: { id: string }) {
                 )}
               </div>
             </DetailSection>
+
+            <ChecklistRunsSection orderId={order.id} />
           </div>
 
           {status !== 'draft' && status !== 'cancelled' ? (

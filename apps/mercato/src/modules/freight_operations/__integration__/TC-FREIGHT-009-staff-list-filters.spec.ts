@@ -82,6 +82,7 @@ test.describe('TC-FREIGHT-009: staff list filters narrow in both directions', ()
       tripA = await createFreightTripFixture(request, token, { contractId: contractA, contractRouteId: rateLineA })
       tripB = await createFreightTripFixture(request, token, { contractId: contractB, contractRouteId: rateLineB })
       await advanceFreightTripToDelivered(request, token, tripA)
+      await advanceFreightTripToDelivered(request, token, tripB)
 
       // Trip filters: billing status and customer both narrow correctly.
       const unbilled = await listIds(request, token, TRIPS, { billingStatus: 'unbilled', contractId: contractB })

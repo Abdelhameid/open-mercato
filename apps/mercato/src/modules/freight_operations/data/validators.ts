@@ -90,12 +90,76 @@ export const assignOrderSchema = z.object({
   transportTripId: z.string().uuid().optional().nullable(),
 })
 
+export const checklistTemplateItemSchema = z.object({
+  key: z.string().trim().min(1).max(100),
+  label: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(1000).optional().nullable(),
+  required: z.boolean(),
+  requiresAttachment: z.boolean(),
+})
+
+export const checklistTemplateItemsSchema = z
+  .array(checklistTemplateItemSchema)
+  .min(1)
+  .max(50)
+  .superRefine((items, ctx) => {
+    const seen = new Set<string>()
+    items.forEach((item, index) => {
+      if (seen.has(item.key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Checklist item keys must be unique',
+          path: [index, 'key'],
+        })
+      }
+      seen.add(item.key)
+      if (item.requiresAttachment && !item.required) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'An attachment-required checklist item must also be required',
+          path: [index, 'requiresAttachment'],
+        })
+      }
+    })
+  })
+
+export const createChecklistTemplateSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(2000).optional().nullable(),
+  items: checklistTemplateItemsSchema,
+  isActive: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
+})
+
+export const updateChecklistTemplateSchema = createChecklistTemplateSchema.partial().extend({
+  id: z.string().uuid(),
+})
+
+export const checklistAnswerSchema = z.object({
+  key: z.string().trim().min(1).max(100),
+  checked: z.boolean(),
+  attachmentId: z.string().uuid().optional().nullable(),
+  notes: z.string().trim().max(1000).optional().nullable(),
+})
+
+export const checklistSubmissionSchema = z.object({
+  templateId: z.string().uuid(),
+  items: z.array(checklistAnswerSchema).max(100),
+})
+
+export type ChecklistSubmissionInput = z.infer<typeof checklistSubmissionSchema>
+export type CreateChecklistTemplateInput = z.infer<typeof createChecklistTemplateSchema>
+export type UpdateChecklistTemplateInput = z.infer<typeof updateChecklistTemplateSchema>
+
 export const deliverOrderSchema = z.object({
   id: z.string().uuid(),
   podDocumentId: z.string().uuid().optional().nullable(),
+  podSignatureDocumentId: z.string().uuid().optional().nullable(),
   podReference: z.string().trim().max(500).optional().nullable(),
   podReceivedByName: z.string().trim().max(500).optional().nullable(),
   podReceivedAt: z.string().datetime().or(z.date()).optional().nullable(),
+  checklist: checklistSubmissionSchema.optional().nullable(),
+  enforceChecklist: z.boolean().optional(),
 })
 
 export const cancelOrderSchema = z.object({
@@ -311,9 +375,12 @@ export const tripActionSchema = z.object({ id: z.string().uuid() })
 export const tripDeliverSchema = z.object({
   id: z.string().uuid(),
   podDocumentId: z.string().uuid().optional().nullable(),
+  podSignatureDocumentId: z.string().uuid().optional().nullable(),
   podReference: z.string().trim().max(500).optional().nullable(),
   podReceivedByName: z.string().trim().max(500).optional().nullable(),
   podReceivedAt: z.string().datetime().or(z.date()).optional().nullable(),
+  checklist: checklistSubmissionSchema.optional().nullable(),
+  enforceChecklist: z.boolean().optional(),
 })
 
 const tripChargeSchema = z.object({
@@ -434,8 +501,11 @@ export const driverActionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('order_deliver'),
     orderId: z.string().uuid(),
-    podReference: z.string().trim().min(1).max(500),
+    podReference: z.string().trim().max(500).optional().nullable(),
+    podDocumentId: z.string().uuid().optional().nullable(),
+    podSignatureDocumentId: z.string().uuid().optional().nullable(),
     podReceivedByName: z.string().trim().max(500).optional().nullable(),
+    checklist: checklistSubmissionSchema.optional().nullable(),
   }),
   z.object({
     type: z.literal('trip_start'),
@@ -444,8 +514,11 @@ export const driverActionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('trip_deliver'),
     tripId: z.string().uuid(),
-    podReference: z.string().trim().min(1).max(500),
+    podReference: z.string().trim().max(500).optional().nullable(),
+    podDocumentId: z.string().uuid().optional().nullable(),
+    podSignatureDocumentId: z.string().uuid().optional().nullable(),
     podReceivedByName: z.string().trim().max(500).optional().nullable(),
+    checklist: checklistSubmissionSchema.optional().nullable(),
   }),
   z.object({
     type: z.literal('rest_start'),

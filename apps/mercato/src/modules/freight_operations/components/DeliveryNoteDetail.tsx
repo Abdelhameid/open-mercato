@@ -19,6 +19,7 @@ import {
   type FreightDeliveryNoteRow,
 } from './deliveryNoteOptions'
 import { DeliveryNoteActionDialog } from './DeliveryNoteActionDialog'
+import { buildAttachmentFileUrl } from '@open-mercato/core/modules/attachments/lib/imageUrls'
 
 const RESOURCE = 'freight_operations/delivery-notes'
 const LABEL_MISSING = '—'
@@ -284,8 +285,34 @@ export default function DeliveryNoteDetail({ id }: { id: string }) {
                 value={note.pod_reference || LABEL_MISSING}
               />
               <FieldRow
+                label={t('freight_operations.delivery_notes.fields.podDocument', 'POD document')}
+                value={note.pod_document_id ? (
+                  <a
+                    className="underline-offset-4 hover:underline"
+                    href={buildAttachmentFileUrl(note.pod_document_id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {t('freight_operations.delivery_notes.detail.viewDocument', 'View document')}
+                  </a>
+                ) : LABEL_MISSING}
+              />
+              <FieldRow
                 label={t('freight_operations.delivery_notes.fields.popReference', 'Proof of pickup reference')}
                 value={note.pop_reference || LABEL_MISSING}
+              />
+              <FieldRow
+                label={t('freight_operations.delivery_notes.fields.popDocument', 'POP document')}
+                value={note.pop_document_id ? (
+                  <a
+                    className="underline-offset-4 hover:underline"
+                    href={buildAttachmentFileUrl(note.pop_document_id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {t('freight_operations.delivery_notes.detail.viewDocument', 'View document')}
+                  </a>
+                ) : LABEL_MISSING}
               />
               <FieldRow
                 label={t('freight_operations.delivery_notes.fields.deliveredAt', 'Delivered at')}

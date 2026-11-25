@@ -1,5 +1,7 @@
 # App module completion: transport / fleet / HR
 
+> **Historical — completed.** Current project status lives in [`PROJECT-PLAN.md`](./PROJECT-PLAN.md).
+
 Three sibling app modules landed in one commit (`c368715c0`, "feat(app): add the
 fleet, HR and transport operations modules"), but only one of them was finished.
 This plan tracks bringing the other two to the same standard.

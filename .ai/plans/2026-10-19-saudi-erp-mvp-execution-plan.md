@@ -1,7 +1,7 @@
 # Saudi ERP MVP — prioritized execution plan
 
 **Created:** 2026-10-19
-**Status:** Ready to execute
+**Status:** Historical — M0–M5 were executed 2026-10-19→20. **Current status lives in [`PROJECT-PLAN.md`](./PROJECT-PLAN.md).** The tracker below is the 2026-10-20 record and must not be updated.
 **Inputs:** the module audits of `fleet_management`, `transport_operations`, `freight_operations`, `vehicle_rentals`, `student_transport`, `financial`, `saudi_localization`, `hr_management`, `customers` and `sales`; the existing plans in `.ai/plans/`; the financial and HR specs in `.ai/specs/`.
 **Companions:** [`2026-09-26-app-modules-completion.md`](./2026-09-26-app-modules-completion.md), [`2026-09-26-fleet-hr-handoff.md`](./2026-09-26-fleet-hr-handoff.md), [`../specs/2026-10-09-financial-module-program.md`](../specs/2026-10-09-financial-module-program.md), [`../specs/2026-09-26-hr-compensation-domain.md`](../specs/2026-09-26-hr-compensation-domain.md).
 

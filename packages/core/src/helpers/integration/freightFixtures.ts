@@ -464,3 +464,78 @@ export async function runDeliveryNoteAction(
   const body = await readJsonSafe<JsonMap>(response);
   return { ok: response.ok(), status: response.status(), body };
 }
+
+export type ChecklistTemplateFixtureItem = {
+  key: string;
+  label: string;
+  description?: string | null;
+  required: boolean;
+  requiresAttachment: boolean;
+};
+
+export async function createChecklistTemplateFixture(
+  request: APIRequestContext,
+  token: string,
+  input: {
+    name: string;
+    description?: string | null;
+    items: ChecklistTemplateFixtureItem[];
+    isActive?: boolean;
+    isDefault?: boolean;
+  },
+): Promise<{ id: string; name: string }> {
+  const id = await createFreightEntity(request, token, '/api/freight_operations/checklist-templates', {
+    name: input.name,
+    ...(input.description !== undefined ? { description: input.description } : {}),
+    items: input.items,
+    ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+    ...(input.isDefault !== undefined ? { isDefault: input.isDefault } : {}),
+  }, ['id']);
+  return { id, name: input.name };
+}
+
+export async function uploadDriverAttachmentFixture(
+  request: APIRequestContext,
+  token: string,
+  input: {
+    targetKind: 'order' | 'trip';
+    targetId: string;
+    fileName: string;
+    mimeType: string;
+    buffer: Buffer;
+  },
+): Promise<{ id: string; fileName: string }> {
+  const baseUrl = process.env.BASE_URL?.trim() || 'http://localhost:3000';
+  const response = await request.fetch(`${baseUrl}/api/freight_operations/driver/attachments`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    multipart: {
+      targetKind: input.targetKind,
+      targetId: input.targetId,
+      file: {
+        name: input.fileName,
+        mimeType: input.mimeType,
+        buffer: input.buffer,
+      },
+    },
+  });
+  const payload = await readJsonSafe<{ item?: { id?: string; fileName?: string } }>(response);
+  expect(response.status(), 'POST /api/freight_operations/driver/attachments should return 200').toBe(200);
+  const id = payload?.item?.id;
+  expect(id, 'Driver attachment response should include item.id').toBeTruthy();
+  return { id: String(id), fileName: String(payload?.item?.fileName ?? input.fileName) };
+}
+
+export async function getChecklistRunsFixture(
+  request: APIRequestContext,
+  token: string,
+  query: { orderId?: string; tripId?: string },
+): Promise<JsonMap[]> {
+  const params = new URLSearchParams();
+  if (query.orderId) params.set('orderId', query.orderId);
+  if (query.tripId) params.set('tripId', query.tripId);
+  const response = await apiRequest(request, 'GET', `/api/freight_operations/checklist-runs?${params.toString()}`, { token });
+  const payload = await readJsonSafe<{ runs?: JsonMap[] }>(response);
+  if (!response.ok()) return [];
+  return payload?.runs ?? [];
+}

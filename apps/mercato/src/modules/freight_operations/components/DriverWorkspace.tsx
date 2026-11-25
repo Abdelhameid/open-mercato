@@ -5,7 +5,6 @@ import { AlertTriangle, Coffee, MapPin, Navigation, Play, Square, Truck } from '
 import { Page, PageBody, PageHeader } from '@open-mercato/ui/backend/Page'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { Input } from '@open-mercato/ui/primitives/input'
 import { Textarea } from '@open-mercato/ui/primitives/textarea'
 import {
   Dialog,
@@ -22,6 +21,12 @@ import { buildOptimisticLockHeader } from '@open-mercato/ui/backend/utils/optimi
 import { useGuardedMutation } from '@open-mercato/ui/backend/injection/useGuardedMutation'
 import { useLocale, useT } from '@open-mercato/shared/lib/i18n/context'
 import { formatFreightDate } from './freightOptions'
+import {
+  DriverDeliverDialog,
+  type DeliverTarget,
+  type DriverChecklistWork,
+  type DriverDeliverValues,
+} from './DriverDeliverDialog'
 
 const ACTIONS_API = '/api/freight_operations/driver/actions'
 const WORK_API = '/api/freight_operations/driver/work'
@@ -53,16 +58,10 @@ type DriverTrip = {
 
 type DriverWork = {
   driver: { id: string; fullName: string; phone: string; status: string }
+  checklist: DriverChecklistWork | null
   orders: DriverOrder[]
   trips: DriverTrip[]
   openRestBreak: { id: string; tripId: string | null; startedAt: string } | null
-}
-
-type DeliverTarget = {
-  kind: 'order' | 'trip'
-  id: string
-  label: string
-  updatedAt?: string | null
 }
 
 function navigationHref(location: string, provider: 'google' | 'waze'): string {
@@ -363,8 +362,9 @@ export default function DriverWorkspace() {
 
       <DriverDeliverDialog
         target={deliverTarget}
+        checklist={work?.checklist ?? null}
         onOpenChange={(open) => { if (!open) setDeliverTarget(null) }}
-        onSubmit={(target, values) => {
+        onSubmit={(target, values: DriverDeliverValues) => {
           setDeliverTarget(null)
           void runAction(
             target.kind === 'order'
@@ -391,80 +391,6 @@ export default function DriverWorkspace() {
         }}
       />
     </Page>
-  )
-}
-
-function DriverDeliverDialog({
-  target,
-  onOpenChange,
-  onSubmit,
-}: {
-  target: DeliverTarget | null
-  onOpenChange: (open: boolean) => void
-  onSubmit: (target: DeliverTarget, values: { podReference: string; podReceivedByName?: string }) => void
-}) {
-  const t = useT()
-  const [podReference, setPodReference] = React.useState('')
-  const [receivedBy, setReceivedBy] = React.useState('')
-  const [error, setError] = React.useState<string | null>(null)
-  const open = target !== null
-
-  React.useEffect(() => {
-    if (!open) return
-    setPodReference('')
-    setReceivedBy('')
-    setError(null)
-  }, [open])
-
-  const submit = React.useCallback(() => {
-    if (!target) return
-    if (!podReference.trim()) {
-      setError(t('freight_operations.driver.podRequired', 'Enter the proof of delivery reference.'))
-      return
-    }
-    onSubmit(target, {
-      podReference: podReference.trim(),
-      ...(receivedBy.trim() ? { podReceivedByName: receivedBy.trim() } : {}),
-    })
-  }, [onSubmit, podReference, receivedBy, t, target])
-
-  const handleKeyDown = useDialogKeyHandler({
-    onConfirm: submit,
-    onCancel: () => onOpenChange(false),
-  })
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent onKeyDown={handleKeyDown}>
-        <DialogHeader>
-          <DialogTitle>{t('freight_operations.driver.deliverTitle', 'Record delivery')}</DialogTitle>
-          <DialogDescription>
-            {target
-              ? t('freight_operations.driver.deliverDescription', 'Deliver {label} and record the proof of delivery.', { label: target.label })
-              : ''}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-3">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium text-foreground">{t('freight_operations.driver.podReference', 'POD reference')}</span>
-            <Input value={podReference} onChange={(event) => setPodReference(event.target.value)} />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium text-foreground">{t('freight_operations.driver.receivedBy', 'Received by')}</span>
-            <Input value={receivedBy} onChange={(event) => setReceivedBy(event.target.value)} />
-          </label>
-          {error ? <p className="text-sm text-status-error-text">{error}</p> : null}
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            {t('common.cancel', 'Cancel')}
-          </Button>
-          <Button type="button" onClick={submit}>
-            {t('freight_operations.driver.deliver', 'Deliver')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   )
 }
 

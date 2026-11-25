@@ -19,6 +19,7 @@ import { buildOptimisticLockHeader } from '@open-mercato/ui/backend/utils/optimi
 import { useGuardedMutation } from '@open-mercato/ui/backend/injection/useGuardedMutation'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import type { DeliveryNoteActionMode, FreightDeliveryNoteRow } from './deliveryNoteOptions'
+import { ProofFilePicker } from './ProofFilePicker'
 
 const ENTITY_ID = 'freight_operations:freight_delivery_note'
 const CONTEXT_ID = 'freight_operations.delivery_notes.action'
@@ -40,7 +41,7 @@ const ACTION_TITLE_FALLBACKS: Record<DeliveryNoteActionMode, string> = {
 
 const ACTION_DESCRIPTION_FALLBACKS: Record<DeliveryNoteActionMode, string> = {
   issue: 'The seller, driver and vehicle are frozen into the document when it is issued.',
-  deliver: 'Record who received the goods. A POD reference is required.',
+  deliver: 'Record who received the goods. Add a POD reference or attach a POD document.',
   cancel: 'Cancelling a delivery note is refused while an external waybill is still recorded.',
   waybill: 'Enter the waybill number issued on the TGA Bayan platform.',
   waybill_cancel: 'Mark the external Bayan Naql waybill as cancelled.',
@@ -52,6 +53,21 @@ const ACTION_BUTTON_FALLBACKS: Record<DeliveryNoteActionMode, string> = {
   cancel: 'Cancel note',
   waybill: 'Record waybill',
   waybill_cancel: 'Cancel waybill',
+}
+
+async function uploadNoteAttachment(noteId: string, file: File): Promise<string> {
+  const form = new FormData()
+  form.set('entityId', ENTITY_ID)
+  form.set('recordId', noteId)
+  form.set('file', file, file.name || 'proof')
+  const call = await apiCallOrThrow<{ item?: { id?: string } }>(
+    '/api/attachments',
+    { method: 'POST', body: form },
+    { errorMessage: 'Unable to upload the proof document.' },
+  )
+  const id = call.result?.item?.id
+  if (!id) throw new Error('[internal] Attachment upload returned no id.')
+  return id
 }
 
 const ENDPOINTS: Record<DeliveryNoteActionMode, string> = {
@@ -84,6 +100,8 @@ export function DeliveryNoteActionDialog({
   const [receivedByIdNumber, setReceivedByIdNumber] = React.useState('')
   const [podReference, setPodReference] = React.useState('')
   const [popReference, setPopReference] = React.useState('')
+  const [podFile, setPodFile] = React.useState<File | null>(null)
+  const [popFile, setPopFile] = React.useState<File | null>(null)
   const [reason, setReason] = React.useState('')
   const [waybillNumber, setWaybillNumber] = React.useState('')
   const [waybillUrl, setWaybillUrl] = React.useState('')
@@ -97,6 +115,8 @@ export function DeliveryNoteActionDialog({
     setReceivedByIdNumber(note.received_by_id_number ?? '')
     setPodReference(note.pod_reference ?? '')
     setPopReference(note.pop_reference ?? '')
+    setPodFile(null)
+    setPopFile(null)
     setReason('')
     setWaybillNumber(note.external_waybill_number ?? '')
     setWaybillUrl(note.external_waybill_url ?? '')
@@ -110,8 +130,8 @@ export function DeliveryNoteActionDialog({
       setError(t('freight_operations.delivery_notes.deliver.receivedByRequired', 'Enter the name of the person who received the goods.'))
       return
     }
-    if (mode === 'deliver' && podReference.trim().length === 0) {
-      setError(t('freight_operations.delivery_notes.deliver.podRequired', 'Enter a proof of delivery reference.'))
+    if (mode === 'deliver' && podReference.trim().length === 0 && !podFile) {
+      setError(t('freight_operations.delivery_notes.deliver.podRequired', 'Enter a proof of delivery reference or attach a document.'))
       return
     }
     if (mode === 'cancel' && reason.trim().length === 0) {
@@ -129,7 +149,7 @@ export function DeliveryNoteActionDialog({
         id: note.id,
         receivedByName: receivedByName.trim(),
         ...(receivedByIdNumber.trim() ? { receivedByIdNumber: receivedByIdNumber.trim() } : {}),
-        podReference: podReference.trim(),
+        ...(podReference.trim() ? { podReference: podReference.trim() } : {}),
         ...(popReference.trim() ? { popReference: popReference.trim() } : {}),
       },
       cancel: { id: note.id, reason: reason.trim() },
@@ -151,19 +171,26 @@ export function DeliveryNoteActionDialog({
     setError(null)
     try {
       await runMutation<Awaited<ReturnType<typeof apiCallOrThrow>>>({
-        operation: () => withScopedApiRequestHeaders(
-          buildOptimisticLockHeader(note.updatedAt ?? note.updated_at ?? null),
-          () => apiCallOrThrow(ENDPOINTS[mode], {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(payloadByMode[mode]),
-          }, {
-            errorMessage: t(
-              `freight_operations.delivery_notes.${mode}.error`,
-              'Unable to update the delivery note.',
-            ),
-          }),
-        ),
+        operation: async () => {
+          const payload = { ...payloadByMode[mode] }
+          if (mode === 'deliver') {
+            if (podFile) payload.podDocumentId = await uploadNoteAttachment(note.id, podFile)
+            if (popFile) payload.popDocumentId = await uploadNoteAttachment(note.id, popFile)
+          }
+          return withScopedApiRequestHeaders(
+            buildOptimisticLockHeader(note.updatedAt ?? note.updated_at ?? null),
+            () => apiCallOrThrow(ENDPOINTS[mode], {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(payload),
+            }, {
+              errorMessage: t(
+                `freight_operations.delivery_notes.${mode}.error`,
+                'Unable to update the delivery note.',
+              ),
+            }),
+          )
+        },
         mutationPayload: { operation: `delivery_notes.${mode}`, id: note.id, updatedAt: note.updatedAt ?? null },
         context: {
           formId: CONTEXT_ID,
@@ -195,7 +222,9 @@ export function DeliveryNoteActionDialog({
     note,
     onCompleted,
     onOpenChange,
+    podFile,
     podReference,
+    popFile,
     popReference,
     reason,
     receivedByIdNumber,
@@ -257,6 +286,30 @@ export function DeliveryNoteActionDialog({
                 </span>
                 <Input value={popReference} onChange={(event) => setPopReference(event.target.value)} />
               </label>
+              <div className="flex flex-col gap-1 text-sm">
+                <span className="font-medium text-foreground">
+                  {t('freight_operations.delivery_notes.fields.podDocument', 'POD document')}
+                </span>
+                <ProofFilePicker
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  label={t('freight_operations.delivery_notes.deliver.attachPod', 'Attach POD document')}
+                  file={podFile}
+                  disabled={isSaving}
+                  onChange={setPodFile}
+                />
+              </div>
+              <div className="flex flex-col gap-1 text-sm">
+                <span className="font-medium text-foreground">
+                  {t('freight_operations.delivery_notes.fields.popDocument', 'POP document')}
+                </span>
+                <ProofFilePicker
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  label={t('freight_operations.delivery_notes.deliver.attachPop', 'Attach POP document')}
+                  file={popFile}
+                  disabled={isSaving}
+                  onChange={setPopFile}
+                />
+              </div>
             </>
           ) : null}
           {mode === 'cancel' ? (

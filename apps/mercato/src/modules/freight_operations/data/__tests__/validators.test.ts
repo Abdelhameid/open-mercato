@@ -1,8 +1,11 @@
 /** @jest-environment node */
 import {
+  createChecklistTemplateSchema,
   createContractSchema,
   createOrderSchema,
   createTripSchema,
+  deliverOrderSchema,
+  driverActionSchema,
   generateAbstractSchema,
   recordPaymentSchema,
   updateOrderSchema,
@@ -138,5 +141,48 @@ describe('voidPaymentSchema', () => {
   it('requires a reason in the record, not only in the UI', () => {
     expect(voidPaymentSchema.safeParse({ id: CUSTOMER_ID, reason: 'duplicate transfer' }).success).toBe(true)
     expect(voidPaymentSchema.safeParse({ id: CUSTOMER_ID, reason: '' }).success).toBe(false)
+  })
+})
+
+describe('checklist schemas', () => {
+  const items = [
+    { key: 'seal', label: 'Seal intact', required: true, requiresAttachment: false },
+    { key: 'photo', label: 'Cargo photo', required: true, requiresAttachment: true },
+  ]
+
+  it('accepts a template with unique keys', () => {
+    expect(createChecklistTemplateSchema.safeParse({ name: 'Delivery', items }).success).toBe(true)
+  })
+
+  it('refuses duplicate item keys and an attachment-only item', () => {
+    expect(createChecklistTemplateSchema.safeParse({
+      name: 'Duplicate',
+      items: [items[0], { ...items[0], label: 'Seal again' }],
+    }).success).toBe(false)
+    expect(createChecklistTemplateSchema.safeParse({
+      name: 'Attachment only',
+      items: [{ key: 'doc', label: 'Document', required: false, requiresAttachment: true }],
+    }).success).toBe(false)
+  })
+
+  it('accepts a checklist submission and refuses a malformed one', () => {
+    expect(deliverOrderSchema.safeParse({
+      id: CUSTOMER_ID,
+      checklist: {
+        templateId: OTHER_ID,
+        items: [{ key: 'seal', checked: true }],
+      },
+    }).success).toBe(true)
+    expect(deliverOrderSchema.safeParse({
+      id: CUSTOMER_ID,
+      checklist: { templateId: 'not-a-uuid', items: [] },
+    }).success).toBe(false)
+  })
+
+  it('accepts reference, document and signature POD artifacts on a driver delivery', () => {
+    const base = { type: 'order_deliver', orderId: CUSTOMER_ID }
+    expect(driverActionSchema.safeParse({ ...base, podReference: 'POD-1' }).success).toBe(true)
+    expect(driverActionSchema.safeParse({ ...base, podDocumentId: OTHER_ID }).success).toBe(true)
+    expect(driverActionSchema.safeParse({ ...base, podSignatureDocumentId: OTHER_ID }).success).toBe(true)
   })
 })

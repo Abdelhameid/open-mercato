@@ -1,7 +1,7 @@
 # LeanDispatcher feature parity — gap matrix and program plan
 
 **Created:** 2026-11-21
-**Status:** Active — Phases 1–5 core implemented; Phase 6 largely implemented (credit/debit notes, product links, Gulf currencies); provider-gated items pending
+**Status:** Detail document — the feature matrix and phase history below are authoritative detail. **Current status lives in [`PROJECT-PLAN.md`](./PROJECT-PLAN.md)**; do not add a second status tracker here.
 **Source of truth for the comparison:** LeanDispatcher marketing site
 (`https://leandispatcher.ertikaz-tech.com/`, feature copy extracted from its production JS
 bundle), its App Store listing, and a read-only audit of this repository on 2026-11-21.
@@ -68,8 +68,8 @@ external providers (TGA/Bayan, SMS, maps, telematics) and are explicitly gated.
 | Dedicated driver app (Android/iOS) | **Partial (Phase 3)** | Staff-linked driver PWA at `/backend/driver`; no native shell/offline |
 | Driver sees assigned deliveries and navigates to pickup/drop-off | **Shipped (Phase 3)** | Assigned orders/trips list with Google Maps and Waze deep links for pickup/drop-off and origin/destination |
 | Driver changes order status from the road | **Shipped (Phase 3)** | Driver start/deliver actions with ownership checks |
-| Driver checklist with required attachments | **Missing** | No checklist model |
-| POD/POP photo, signature, voice note or video capture | **Partial** | Fields accept attachment ids; no capture/upload flow |
+| Driver checklist with required attachments | **Shipped (Phase 3, 2026-11-25)** | Staff checklist templates with ordered items, required/attachment-required flags and an active default; the driver deliver dialog renders the checklist and the deliver command blocks until it is complete; `freight_checklist_runs` snapshots the template and answers |
+| POD/POP photo, signature, voice note or video capture | **Shipped (Phase 3, 2026-11-25)** | Driver POD photo/document upload and canvas receiver signature (`pod_document_id`, `pod_signature_document_id`); staff delivery-note POD/POP document uploads; voice/video capture remains out of scope |
 | Rest breaks / hours of service | **Partial (Phase 3)** | Rest break start/end records; HOS rules not modelled |
 | SOS | **Shipped (Phase 3)** | Driver alert with optional geolocation; dispatch notification wiring remains |
 | Driver–dispatcher chat and calls | **Partial** | WhatsApp/email hub and call ingestion exist; not wired to freight |
@@ -149,8 +149,11 @@ external providers (TGA/Bayan, SMS, maps, telematics) and are explicitly gated.
    model; decide staff-user vs dedicated driver auth with the product owner.
 2. Driver console (mobile-first PWA) or native shell: assigned trips, navigation links,
    status updates, rest breaks, SOS.
-3. Checklist templates with required attachments per item.
-4. POD/POP capture (photo, signature, document) writing attachment ids.
+3. Checklist templates with required attachments per item — **shipped 2026-11-25**
+   (`freight_checklist_templates` + `freight_checklist_runs`, driver enforcement,
+   staff evidence panel).
+4. POD/POP capture (photo, signature, document) writing attachment ids — **shipped
+   2026-11-25** for driver POD and staff delivery-note POD/POP documents.
 5. Driver notifications through push (devices + APNS/FCM/Expo already exist).
 
 ### Phase 4 — Tracking and routing (core shipped 2026-11-22)
@@ -216,8 +219,8 @@ The core dispatch loop (intake → trip → delivery note → tracking → ratin
 Phase 6 is largely closed: credit/debit notes, product/package links, Gulf currencies and
 bulk imports, receipt vouchers and the portal contract/invoice views are shipped. The
 remaining product work is depth rather than parity: geofencing and predictive alerts
-(Phase 4), checklist templates and POD capture (Phase 3), automated customer messages and
-expiring document share links (Phase 5), and tenant-renamable labels.
+(Phase 4), automated customer messages and expiring document share links (Phase 5), and
+tenant-renamable labels. Checklist templates and POD capture (Phase 3) shipped on 2026-11-25.
 Provider-gated work (TGA Bayan, SMS, maps key, telematics) should start only once the
 corresponding business approvals are in hand.
 
@@ -281,6 +284,19 @@ made the transport odometer register authoritative. See
   (unique per tenant/org, `RV-` prefix from settings) is allocated inside the payment
   recording transaction and printed from `/backend/freight/payments/<id>/receipt`.
   `TC-FREIGHT-005` asserts the `RV-#####` number.
+- **2026-11-25 (Phase 3)** — Driver checklist templates and POD capture shipped:
+  `freight_checklist_templates` (ordered items, active/default) and
+  `freight_checklist_runs` (template snapshot + answers + attachments, written in
+  the deliver transaction); a driver deliver is refused until every required item
+  is checked and every attachment-required item has a file; the driver uploads
+  proof through `POST /api/freight_operations/driver/attachments` (no
+  `attachments.manage` grant needed); the deliver dialog captures a POD photo or
+  document and a canvas signature (`pod_signature_document_id`); staff see the run
+  on order/trip detail and can attach POD/POP documents to delivery notes.
+  `TC-FREIGHT-021` passes. Spec: `2026-11-25-driver-checklist-and-pod-capture.md`.
+  The full-suite pass also fixed partial contract/order/trip/rate-line updates that
+  nulled stored dates when the payload omitted them, and TC-FREIGHT-009 now marks
+  its second trip delivered before generating the abstract.
 - **2026-11-24 (Phase 5)** — Portal contract and invoice views shipped:
   `/api/portal/freight/contracts` (active/suspended/terminated contracts with their
   negotiated route rates) and `/api/portal/freight/invoices` (the customer's sales

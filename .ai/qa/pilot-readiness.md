@@ -40,6 +40,7 @@ Each flow names the spec that covers it. They must be green in CI before the pil
 12. **Freight abstract → customer portal accept/dispute → invoice** — `freight_operations/__integration__/TC-FREIGHT-006`, `TC-FREIGHT-007`, plus the portal route checks in this cycle
 13. **Rental return → invoice** — extend `vehicle_rentals/__integration__/TC-RENTAL-001` or add the invoice assertion to the same fixture
 14. **Student subscription → invoice period** — extend `student_transport/__integration__/TC-STUDENT-001`
+15. **Driver checklist → POD photo/signature → deliver** — `freight_operations/__integration__/TC-FREIGHT-021`
 
 ## 2026-11-23 consolidation pass
 
@@ -87,6 +88,25 @@ Each flow names the spec that covers it. They must be green in CI before the pil
   `.ai/specs/2026-11-23-resource-register-consolidation.md`. Disabling staff
   without that link would break time tracking, planner availability and
   warranty-claim assignment.
+
+## 2026-11-25 driver checklist and POD capture
+
+- Create the pilot's checklist template at
+  `/backend/freight/checklist-templates` and mark it **Use for driver deliveries**. While an
+  active default template exists, driver deliveries are refused until every required item is
+  checked and every attachment-required item has a file; deactivate or unset the default to
+  suspend enforcement.
+- Staff delivery-note delivery now accepts POD/POP document uploads through
+  `/api/attachments` (`attachments.manage`). Roles that manage delivery notes but lack that
+  permission can still record a reference; grant `attachments.manage` if they must upload.
+- Sync the new `freight.checklist_templates.manage` feature for tenants with explicit role
+  feature lists: `yarn mercato auth sync-role-acls` (admin/superadmin wildcards already cover it).
+- Gates on 2026-11-25: `yarn generate`, `yarn db:generate` (only the freight migration),
+  `yarn typecheck`, `yarn lint` (0 errors), `yarn i18n:check-sync`, `yarn build:packages`,
+  `yarn build:app`, the full app unit suite (1,261 passed), and the full freight integration
+  suite (21/21 passed, including `TC-FREIGHT-021` at 4.9 s). The suite pass also fixed partial
+  contract/order/trip/rate-line updates that nulled stored dates, and corrected
+  `TC-FREIGHT-009`'s second trip setup.
 
 ## Deployment (Railway)
 
